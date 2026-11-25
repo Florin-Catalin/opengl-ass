@@ -119,7 +119,7 @@ bool snowing = false;
 float snowAmount = 0.0f;
 float snowCover = 0.0f;
 const float SNOW_COVER_SECONDS = 40.0f; // to go from bare ground to fully white
-const float SNOW_MELT_SECONDS = 150.0f; // at night; the sun melts it 3x faster, rain within ~20 s
+const float SNOW_MELT_SECONDS = 50.0f;  // in full sun; at night it barely melts, rain clears it in ~20 s
 const int SNOW_MAX_FLAKES = 7000;
 gps::Snow snow;
 gps::Shader snowShader;
@@ -1244,7 +1244,7 @@ void updateDayNight()
 	if (snowAmount > 0.2f)
 		snowCover += frameDt * snowAmount / SNOW_COVER_SECONDS;
 	else
-		snowCover -= frameDt * (1.0f + 2.0f * daylight) / SNOW_MELT_SECONDS + frameDt * rainAmount / 20.0f;
+		snowCover -= frameDt * (0.03f + 0.97f * daylight) / SNOW_MELT_SECONDS + frameDt * rainAmount / 20.0f;
 	snowCover = glm::clamp(snowCover, 0.0f, 1.0f);
 
 	if (rainAmount > 0.2f)
