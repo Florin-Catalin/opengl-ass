@@ -20,6 +20,7 @@ add_executable(opengl_scene
   src/Rain.cpp
   src/Lightning.cpp
   src/Fireflies.cpp
+  src/Snow.cpp
   src/Shader.cpp
   src/SkyBox.cpp
   src/stb_image.c)
