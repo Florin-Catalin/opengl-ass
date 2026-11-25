@@ -67,6 +67,7 @@ const float DAY_LENGTH_SECONDS = 60.0f;
 double lastFrameTime = 0.0;
 glm::vec3 currentLightDir = glm::vec3(0.0f, 1.0f, 2.0f); // direction towards the sun or moon
 glm::vec3 skyColor = glm::vec3(1.0f);
+float moonGlow = 0.0f; // 0..1, how strongly the moon lights the scene and glows in the sky
 GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
@@ -711,19 +712,24 @@ void updateDayNight()
 
 	const glm::vec3 sunsetColor(1.0f, 0.55f, 0.3f);
 	const glm::vec3 noonColor(1.0f, 0.97f, 0.9f);
-	const glm::vec3 moonColor(0.25f, 0.3f, 0.5f);
+	// Moonlight: cool blue, about a third as strong as midday light on screen (stylised; real
+	// moonlight is far dimmer, but the eye's night vision makes it read blue and bright).
+	const glm::vec3 moonColor(0.32f, 0.42f, 0.78f);
 	glm::vec3 directColor;
 	if (elevation >= 0.0f)
 		directColor = lerp3(sunsetColor, noonColor, elevation / 0.4f) * glm::smoothstep(0.0f, 0.15f, elevation);
 	else
-		directColor = moonColor * glm::smoothstep(0.0f, 0.15f, -elevation);
+		directColor = moonColor * glm::smoothstep(0.0f, 0.25f, -elevation);
+	moonGlow = glm::smoothstep(0.0f, 0.25f, -elevation);
 
 	// 1 at day, 0 at night, with a short twilight around the horizon.
 	float daylight = glm::smoothstep(-0.15f, 0.2f, elevation);
 	nightFactor = 1.0f - daylight;
 	updatePlanets(glm::mat3(skyTurn), daylight);
 	float twilight = 1.0f - glm::smoothstep(0.0f, 0.3f, fabsf(elevation));
-	glm::vec3 ambient = lerp3(glm::vec3(0.04f, 0.05f, 0.1f), glm::vec3(0.2f), daylight);
+	// Night ambient is bluer and a little brighter while the moon is up (sky scattering its light).
+	glm::vec3 nightAmbient = lerp3(glm::vec3(0.03f, 0.035f, 0.06f), glm::vec3(0.05f, 0.07f, 0.14f), moonGlow);
+	glm::vec3 ambient = lerp3(nightAmbient, glm::vec3(0.2f), daylight);
 	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
 	skyColor = lerp3(skyColor, skyColor * glm::vec3(1.0f, 0.6f, 0.45f), twilight);
 	glm::vec3 fogColor = skyColor * 0.5f;
