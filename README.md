@@ -55,3 +55,7 @@ python3 -I tools/glb2obj.py path/to/model.glb objects/<name> <name>
 ```
 
 Materials without textures get small solid-color PNGs, because the shader always samples a diffuse texture.
+
+## Credits
+
+- "Low Poly Moon" by [FoxVenture](https://sketchfab.com/FoxVenture), [Sketchfab](https://sketchfab.com/3d-models/low-poly-moon-d671eb35d2244c8cb98d06b4948d9937), licensed [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). Converted to OBJ in `objects/moon/`.

@@ -1,0 +1,49 @@
+newmtl lambert1
+Ka 0 0 0
+Kd 0.3656 0.4172 0.5482
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat0.png
+
+newmtl Light_grey_middle_part
+Ka 0 0 0
+Kd 0.3134 0.3576 0.4699
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat1.png
+
+newmtl Shadow_Dark
+Ka 0 0 0
+Kd 0.2208 0.2519 0.3310
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat2.png
+
+newmtl Shadow_Darkest
+Ka 0 0 0
+Kd 0.1053 0.1162 0.1440
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat3.png
+
+newmtl Medium_Dark
+Ka 0 0 0
+Kd 0.2026 0.2236 0.2771
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat4.png
+
+newmtl lambert5
+Ka 0 0 0
+Kd 0.1850 0.2042 0.2530
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat5.png
+
+newmtl Main_colour
+Ka 0 0 0
+Kd 0.1053 0.1162 0.1440
+Ks 0 0 0
+Ns 1
+map_Kd moon_mat6.png
+
