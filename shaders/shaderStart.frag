@@ -29,6 +29,8 @@ uniform vec3 fireLightPosEye;
 uniform vec3 fireColor;
 uniform float fireIntensity;
 
+#include "clouds.glsl"
+
 
 //fog
 uniform	vec3 startFog;
@@ -164,6 +166,10 @@ void main()
 	}	
 		 
 	float shadow = computeShadow();
+	// Clouds between this point and the sun/moon block part of the direct light.
+	float cloudShade = 1.0f - 0.6f * cloudDensityAlong(fragPos.xyz, normalize(lightDir));
+	diffuse *= cloudShade;
+	specular *= cloudShade;
 	
 	vec3 albedo = vec3(texture(diffuseTexture, fragTexCoords));
 	vec3 specMap = vec3(texture(specularTexture, fragTexCoords));

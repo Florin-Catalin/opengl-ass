@@ -951,6 +951,7 @@ void renderScene()
 
 	// lamp toggle (H/J); must be sent while this program is bound
 	glUniform1i(lightsOnLoc, lightsOn);
+	setCloudUniforms(myCustomShader.shaderProgram);
 
 	// same model matrix the house is drawn with below
 	updateFireLight(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0)));
