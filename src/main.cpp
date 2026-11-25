@@ -108,6 +108,12 @@ glm::vec3 rainColor = glm::vec3(0.6f);
 gps::Lightning lightning;
 gps::Shader lightningShader;
 double nextStrikeTime = 0.0; // 0 = not scheduled
+
+// Rainbow: appears after the rain is switched off and stays about a minute and a half, if the sun
+// is out and low enough (below the bow's radius, otherwise the bow is below the horizon).
+const float RAINBOW_HOLD_SECONDS = 75.0f; // fully visible until then, then fades over 20 s
+double rainStoppedTime = -1000.0;
+float rainbowStrength = 0.0f;
 void strikeLightning();
 GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
@@ -269,7 +275,11 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 		strikeLightning();
 
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
+	{
 		raining = !raining;
+		if (!raining)
+			rainStoppedTime = glfwGetTime();
+	}
 
 	if (key == GLFW_KEY_P && action == GLFW_PRESS)
 		dayCount += 10; // watch the planets move against the stars
@@ -932,6 +942,13 @@ void updateDayNight()
 	}
 	else
 		nextStrikeTime = 0.0;
+	float sinceRain = (float)(now - rainStoppedTime);
+	float afterRain = glm::smoothstep(1.0f, 4.0f, sinceRain) *
+		(1.0f - glm::smoothstep(RAINBOW_HOLD_SECONDS, RAINBOW_HOLD_SECONDS + 20.0f, sinceRain));
+	float sunHeight = sunSkyDir.y; // sin of the sun's elevation; the bow (48 deg) needs it below ~0.74
+	float lowSun = glm::smoothstep(0.0f, 0.08f, sunHeight) * (1.0f - glm::smoothstep(0.6f, 0.74f, sunHeight));
+	rainbowStrength = 0.55f * afterRain * lowSun * daylight;
+
 	float flash = lightning.Flash(now) * glm::min(rainAmount * 1.5f, 1.0f);
 	ambient += glm::vec3(0.45f, 0.5f, 0.65f) * flash;
 	skyColor += glm::vec3(0.6f, 0.65f, 0.85f) * flash;
@@ -1285,6 +1302,8 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
 	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
 	// Meteors are a night sight; by day only a faint trace shows (bright fireballs can be seen in daylight).
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "rainbowStrength"), rainbowStrength);
 	updateMeteors(skyboxShader.shaderProgram, glm::mix(0.3f, 1.0f, glm::smoothstep(0.3f, 0.9f, nightFactor)));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));

@@ -32,6 +32,37 @@ uniform vec3 meteorTangent[MAX_METEORS]; // unit direction of travel at the star
 uniform vec4 meteorState[MAX_METEORS];   // x = head angle travelled, y = tail length (radians),
                                          // z = brightness, w = fireball tint (0 = white, 1 = green-orange)
 
+// Rainbow: one bow centred on the antisolar point (opposite the sun), red outside, with a brighter
+// sky inside it. Real rainbows sit at 42 degrees; this one is drawn larger and wider (RAINBOW_*)
+// so it reads well on screen.
+uniform vec3 sunDirWorld;
+uniform float rainbowStrength; // 0 = none; set from the time since the rain stopped and the sun height
+const float RAINBOW_RADIUS = 48.0; // degrees from the antisolar point to the red outer edge
+const float RAINBOW_WIDTH = 4.5;   // degrees from violet to red
+
+vec3 spectrum(float t) // t: 0 = violet .. 1 = red
+{
+	vec3 c = vec3(smoothstep(0.5, 0.8, t) + 0.3 * smoothstep(0.12, 0.0, t),   // red (and violet's red)
+	              smoothstep(0.25, 0.5, t) * smoothstep(0.95, 0.6, t),            // green
+	              0.85 * smoothstep(0.5, 0.15, t));                               // blue
+	return c;
+}
+
+vec3 rainbow(vec3 dir)
+{
+	float angle = degrees(acos(clamp(dot(dir, -sunDirWorld), -1.0, 1.0)));
+	vec3 light = vec3(0.0);
+
+	float inner = RAINBOW_RADIUS - RAINBOW_WIDTH;
+	float p = (angle - inner) / RAINBOW_WIDTH; // 0 = violet edge .. 1 = red edge
+	float band = smoothstep(0.0, 0.15, p) * smoothstep(1.0, 0.85, p);
+	light += spectrum(clamp(p, 0.0, 1.0)) * band;
+
+	// inside the bow the sky is lighter
+	light += vec3(0.12) * smoothstep(inner, inner - 12.0, angle);
+	return light;
+}
+
 // Moon halo: blue glow in the sky around the moon model, which is drawn after the skybox.
 uniform vec3 moonDirWorld;
 uniform float moonGlow; // 0 = moon down or daytime, 1 = full night with the moon up
@@ -168,4 +199,8 @@ void main()
 			color.rgb = mix(color.rgb, cloudColor, density);
 		}
 	}
+
+	// The rainbow forms in the falling drops between you and the clouds, so it sits in front of them.
+	if (rainbowStrength > 0.0)
+		color.rgb = max(color.rgb + rainbow(dir) * rainbowStrength * horizonFade, vec3(0.0));
 }
