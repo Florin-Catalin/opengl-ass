@@ -11,7 +11,7 @@ An OpenGL 4.1 core-profile / C++11 demo scene for Linux (README marks it unmaint
 - Install `build-essential cmake libglfw3-dev libglew-dev libgl-dev`. GLM is vendored in `third_party/glm`.
 - `cmake -S . -B build && cmake --build build` builds `build/opengl_scene`. `cmake --build build --target run` builds and runs it.
 - Assets (`objects/`, `shaders/`, `textures/`) are loaded via paths relative to the working directory, so always run from the repo root. Filenames are case-sensitive (e.g. `objects/wood/wood.obj`).
-- Verified once by manual compile and link with the Ubuntu GLFW 3.3 and GLEW 2.2 packages on Mesa 4.6 core. It starts with no GL errors. The CMake file itself has not been run.
+- Tested with the Ubuntu 24.04 packages (CMake 3.28, GLFW 3.3, GLEW 2.2) on Mesa with a 4.6 core context.
 
 ## Architecture
 
