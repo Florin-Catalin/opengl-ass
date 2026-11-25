@@ -77,7 +77,10 @@ glm::vec3 sunSkyDir = glm::vec3(0.0f, 1.0f, 0.0f);  // unit direction towards th
 glm::vec3 moonSkyDir = glm::vec3(0.0f, -1.0f, 0.0f); // unit direction towards the moon
 const glm::vec3 MOON_MODEL_CENTER = glm::vec3(0.0f, 10.2f, 0.0f); // the OBJ sits on y = 0
 const float MOON_DISTANCE = 300.0f; // well inside the 1000-unit far plane
-const float MOON_SCALE = 1.2f;      // model radius ~10, so ~12 units across 300 units
+const float MOON_SCALE = 1.2f;
+
+// Stars: the star sphere turns with the sun and moon (same arc and K/L azimuth).
+glm::mat3 starRotation = glm::mat3(1.0f);      // model radius ~10, so ~12 units across 300 units
 
 // Campfire inside the house model (center of its stone ring, in model space).
 const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
@@ -639,6 +642,10 @@ void updateDayNight()
 	glm::vec3 dir = elevation >= 0.0f ? sunDir : moonDir;
 	glm::mat4 azimuth = glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f));
 	currentLightDir = glm::vec3(azimuth * glm::vec4(dir, 1.0f));
+	// sunDir is the fixed vector (2, 0, 1) rotated by theta around Z, then by the azimuth around Y.
+	// The inverse of that rotation maps a world direction into the star sphere's frame.
+	glm::mat4 skyTurn = azimuth * glm::rotate(glm::mat4(1.0f), theta, glm::vec3(0.0f, 0.0f, 1.0f));
+	starRotation = glm::transpose(glm::mat3(skyTurn));
 	sunSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(sunDir, 0.0f)));
 	moonSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(moonDir, 0.0f)));
 
@@ -1000,6 +1007,9 @@ void renderScene()
 
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor));
+	glUniformMatrix3fv(glGetUniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 
