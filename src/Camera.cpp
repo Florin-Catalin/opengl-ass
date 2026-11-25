@@ -18,6 +18,11 @@ namespace gps {
         this->cameraTarget = cameraTarget;
         this->cameraDirection = glm::normalize(cameraTarget - cameraPosition);
         this->cameraRightDirection = glm::normalize(glm::cross(this->cameraDirection, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+        // Start the mouse look from this direction (otherwise the first mouse move snaps to yaw/pitch 0).
+        pitch = glm::degrees(asinf(glm::clamp(this->cameraDirection.y, -1.0f, 1.0f)));
+        yaw = glm::degrees(atan2f(this->cameraDirection.z, this->cameraDirection.x));
+        firstMouse = 1;
     }
     
     glm::mat4 Camera::getViewMatrix()
@@ -58,14 +63,16 @@ namespace gps {
 		front.y = sin(glm::radians(pitch));
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		cameraDirection = glm::normalize(front);
+		cameraRightDirection = glm::normalize(glm::cross(cameraDirection, glm::vec3(0.0f, 1.0f, 0.0f))); // A/D strafe follows the view
 	}
 
 	void Camera::mouse_callback(float xpos, float ypos) {
 
 		if (firstMouse == 1)
 		{
-			lastX = 320;
-			lastY = 240;
+			// Use the real cursor position, so the first event doesn't turn the camera.
+			lastX = xpos;
+			lastY = ypos;
 			firstMouse = 0;
 		}
 		float xoffset = xpos - lastX;
