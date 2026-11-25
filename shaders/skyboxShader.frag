@@ -17,6 +17,12 @@ uniform vec3 planetDir[PLANET_COUNT];         // world direction
 uniform vec3 planetColor[PLANET_COUNT];
 uniform float planetBrightness[PLANET_COUNT]; // 0 = invisible, ~1.6 = Venus at its brightest
 
+// Moon halo: blue glow in the sky around the moon model, which is drawn after the skybox.
+uniform vec3 moonDirWorld;
+uniform float moonGlow; // 0 = moon down or daytime, 1 = full night with the moon up
+const float MOON_ANGULAR_RADIUS = 0.04; // matches MOON_SCALE / MOON_DISTANCE in main.cpp
+const vec3 MOONLIGHT_COLOR = vec3(0.45, 0.6, 1.0);
+
 // Integer hash (PCG-style) -> 3 floats in [0, 1).
 vec3 hash3(ivec3 c)
 {
@@ -80,11 +86,20 @@ void main()
 	vec3 dir = normalize(textureCoordinates);
 	float horizonFade = smoothstep(-0.02, 0.15, dir.y); // haze near the horizon
 
+	// Moon halo: a tight bright ring plus a wide faint wash of blue, and fewer stars near the moon.
+	float moonStarMask = 1.0;
+	if (moonGlow > 0.0) {
+		float fromEdge = max(length(dir - moonDirWorld) - MOON_ANGULAR_RADIUS, 0.0);
+		float halo = 0.35 * exp(-fromEdge / 0.015) + 0.12 * exp(-fromEdge / 0.12);
+		color.rgb += MOONLIGHT_COLOR * halo * moonGlow * horizonFade;
+		moonStarMask = mix(1.0, smoothstep(0.05, 0.3, fromEdge), moonGlow);
+	}
+
 	if (starVisibility > 0.0) {
 		vec3 starDir = starRotation * dir;
 		vec3 stars = starLayer(starDir, 90.0, 0.06, 0.22, 1.2)   // sparse, bright
 		           + starLayer(starDir, 220.0, 0.05, 0.25, 0.6); // dense, faint
-		color.rgb += stars * starVisibility * horizonFade * starMaskNearPlanets(dir);
+		color.rgb += stars * starVisibility * horizonFade * starMaskNearPlanets(dir) * moonStarMask;
 	}
 
 	vec3 planets = vec3(0.0);

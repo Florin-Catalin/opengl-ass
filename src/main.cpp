@@ -1080,6 +1080,8 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
 	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 
