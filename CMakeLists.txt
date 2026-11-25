@@ -18,6 +18,7 @@ add_executable(opengl_scene
   src/Mesh.cpp
   src/Model3D.cpp
   src/Rain.cpp
+  src/Lightning.cpp
   src/Shader.cpp
   src/SkyBox.cpp
   src/stb_image.c)
