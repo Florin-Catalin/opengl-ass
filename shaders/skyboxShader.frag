@@ -6,6 +6,12 @@ out vec4 color;
 uniform samplerCube skybox;
 uniform vec3 skyTint;
 
+#include "clouds.glsl"
+uniform vec3 cameraPosWorld;
+uniform vec3 lightDirWorld;    // towards the sun by day, the moon by night (unit length)
+uniform vec3 cloudLitColor;    // cloud side facing the light
+uniform vec3 cloudShadowColor; // cloud underside / thick parts
+
 // Procedural stars (no texture): visible at night, turning with the sun/moon.
 uniform float starVisibility; // 0 by day, 1 at full night
 uniform mat3 starRotation;    // world direction -> star-sphere direction
@@ -106,4 +112,20 @@ void main()
 	for (int i = 0; i < PLANET_COUNT; i++)
 		planets += planet(dir, i);
 	color.rgb += planets * horizonFade;
+
+	// Clouds cover everything above (stars, planets, halo). Thick parts and parts with more cloud
+	// between them and the light are darker; thin edges near the sun or moon get a bright lining.
+	vec2 hit;
+	if (cloudCoverage > 0.0 && cloudHit(cameraPosWorld, dir, hit)) {
+		float density = cloudDensityAt(hit) * smoothstep(0.03, 0.25, dir.y);
+		if (density > 0.0) {
+			vec2 towardsLight = normalize(lightDirWorld.xz + vec2(1e-4));
+			float occluded = cloudDensityAt(hit + towardsLight * 25.0);
+			float lit = clamp(1.0 - 0.7 * occluded - 0.3 * density, 0.0, 1.0);
+			vec3 cloudColor = mix(cloudShadowColor, cloudLitColor, lit);
+			float forward = pow(max(dot(dir, lightDirWorld), 0.0), 12.0);
+			cloudColor += cloudLitColor * forward * (1.0 - density) * 0.8;
+			color.rgb = mix(color.rgb, cloudColor, density);
+		}
+	}
 }

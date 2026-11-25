@@ -68,6 +68,14 @@ double lastFrameTime = 0.0;
 glm::vec3 currentLightDir = glm::vec3(0.0f, 1.0f, 2.0f); // direction towards the sun or moon
 glm::vec3 skyColor = glm::vec3(1.0f);
 float moonGlow = 0.0f; // 0..1, how strongly the moon lights the scene and glows in the sky
+
+// Clouds: one noise sheet shared by the sky, moon and scene shaders (shaders/clouds.glsl).
+float cloudCoverage = 0.45f;                 // 0 = clear, 1 = overcast; [ and ] change it
+const glm::vec2 WIND_VELOCITY(3.0f, 1.2f);   // world units per second
+glm::vec2 cloudOffset = glm::vec2(0.0f);
+glm::vec3 cloudLitColor = glm::vec3(1.0f);
+glm::vec3 cloudShadowColor = glm::vec3(0.6f);
+void setCloudUniforms(GLuint program);
 GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
@@ -215,6 +223,12 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 			dayCount++;
 		}
 	}
+
+	if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS)
+		cloudCoverage = glm::max(cloudCoverage - 0.15f, 0.0f);
+
+	if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS)
+		cloudCoverage = glm::min(cloudCoverage + 0.15f, 1.0f);
 
 	if (key == GLFW_KEY_P && action == GLFW_PRESS)
 		dayCount += 10; // watch the planets move against the stars
@@ -660,6 +674,13 @@ void updatePlanets(const glm::mat3& skyTurn, float daylight)
 	}
 }
 
+// Cloud uniforms shared by every program that includes clouds.glsl.
+void setCloudUniforms(GLuint program)
+{
+	glUniform2fv(glGetUniformLocation(program, "cloudOffset"), 1, glm::value_ptr(cloudOffset));
+	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), cloudCoverage);
+}
+
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
 {
 	return a + (b - a) * glm::clamp(t, 0.0f, 1.0f);
@@ -733,6 +754,12 @@ void updateDayNight()
 	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
 	skyColor = lerp3(skyColor, skyColor * glm::vec3(1.0f, 0.6f, 0.45f), twilight);
 	glm::vec3 fogColor = skyColor * 0.5f;
+
+	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
+	// blue-grey under the moon, near-black silhouettes on a moonless night.
+	cloudOffset += WIND_VELOCITY * frameDt;
+	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f));
+	cloudShadowColor = ambient * 1.5f + skyColor * 0.1f;
 
 	myCustomShader.useShaderProgram();
 	glUniform3fv(lightDirLoc, 1, glm::value_ptr(currentLightDir));
@@ -1082,6 +1109,13 @@ void renderScene()
 	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
+	setCloudUniforms(skyboxShader.shaderProgram);
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::vec3 lightDirWorld = glm::normalize(currentLightDir);
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "lightDirWorld"), 1, glm::value_ptr(lightDirWorld));
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 
