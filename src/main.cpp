@@ -70,6 +70,15 @@ GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
 
+// Moon model drawn in the sky at night (objects/moon, converted from low_poly_moon.glb).
+gps::Model3D moon;
+gps::Shader moonShader;
+glm::vec3 sunSkyDir = glm::vec3(0.0f, 1.0f, 0.0f);  // unit direction towards the sun
+glm::vec3 moonSkyDir = glm::vec3(0.0f, -1.0f, 0.0f); // unit direction towards the moon
+const glm::vec3 MOON_MODEL_CENTER = glm::vec3(0.0f, 10.2f, 0.0f); // the OBJ sits on y = 0
+const float MOON_DISTANCE = 300.0f; // well inside the 1000-unit far plane
+const float MOON_SCALE = 1.2f;      // model radius ~10, so ~12 units across 300 units
+
 // Campfire inside the house model (center of its stone ring, in model space).
 const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
 bool fireOn = true;
@@ -496,6 +505,7 @@ void initModels()
 
 	farmer = gps::Model3D("objects/farmer/farmer.obj", "objects/farmer/");
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
+	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 
 	tankBounds = farmer.GetBounds();
 	houseBounds = house.GetMeshBounds();
@@ -509,6 +519,7 @@ void initShaders()
 	myCustomShader.loadShader("shaders/shaderStart.vert", "shaders/shaderStart.frag");
 	lightShader.loadShader("shaders/lightCube.vert", "shaders/lightCube.frag");
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
+	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 }
 
 void initUniforms()
@@ -562,6 +573,33 @@ void initUniforms()
 
 bool invisibilistyt = false;
 
+// Draws the moon far away along moonSkyDir, centred on the camera so it doesn't move as you walk.
+// Drawn after the skybox with alpha blending, faded by nightFactor.
+void drawMoon()
+{
+	float alpha = glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f);
+	if (alpha < 0.01f)
+		return;
+
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), cameraPos + moonSkyDir * MOON_DISTANCE);
+	m = glm::rotate(m, (float)glfwGetTime() * 0.05f, glm::vec3(0.0f, 1.0f, 0.0f)); // slow spin
+	m = glm::scale(m, glm::vec3(MOON_SCALE));
+	m = glm::translate(m, -MOON_MODEL_CENTER);
+
+	moonShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(m));
+	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(moonShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
+	glUniform1f(glGetUniformLocation(moonShader.shaderProgram, "moonAlpha"), alpha);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	moon.Draw(moonShader);
+	glDisable(GL_BLEND);
+}
+
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
 {
 	return a + (b - a) * glm::clamp(t, 0.0f, 1.0f);
@@ -599,7 +637,10 @@ void updateDayNight()
 	glm::vec3 sunDir = glm::vec3(2.0f * cosf(theta), 2.0f * elevation, 1.0f);
 	glm::vec3 moonDir = glm::vec3(-sunDir.x, -sunDir.y, sunDir.z);
 	glm::vec3 dir = elevation >= 0.0f ? sunDir : moonDir;
-	currentLightDir = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(dir, 1.0f));
+	glm::mat4 azimuth = glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+	currentLightDir = glm::vec3(azimuth * glm::vec4(dir, 1.0f));
+	sunSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(sunDir, 0.0f)));
+	moonSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(moonDir, 0.0f)));
 
 	const glm::vec3 sunsetColor(1.0f, 0.55f, 0.3f);
 	const glm::vec3 noonColor(1.0f, 0.97f, 0.9f);
@@ -960,6 +1001,7 @@ void renderScene()
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
+	drawMoon();
 
 }
 
