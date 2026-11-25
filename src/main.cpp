@@ -448,6 +448,7 @@ void initUniforms()
 	glUniform3fv(posLightPosLoc, 1, glm::value_ptr(posLightPos));
 
 	fogLoc = glGetUniformLocation(myCustomShader.shaderProgram, "startFog");
+	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
 	lightShader.useShaderProgram();
 	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -631,6 +632,9 @@ void renderScene()
 	//send lightDir matrix data to shader
 	glUniformMatrix3fv(lightDirMatrixLoc, 1, GL_FALSE, glm::value_ptr(lightDirMatrix));
 
+	// lamp toggle (H/J); must be sent while this program is bound
+	glUniform1i(lightsOnLoc, lightsOn);
+
 	glViewport(0, 0, retina_width, retina_height);
 	myCustomShader.useShaderProgram();
 
@@ -782,9 +786,6 @@ void renderScene()
 
 	mySkyBox.Draw(skyboxShader, view, projection);
 
-	//send light control value to shader
-	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
-	glUniform1i(lightsOnLoc, lightsOn);
 }
 
 int main(int argc, const char * argv[]) {
