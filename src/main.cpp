@@ -109,8 +109,11 @@ gps::Shader lightShader;
 gps::Shader depthMapShader;
 
 float angleTank = 0.0f;
-float tankSpeed = 0.001f;
+float tankSpeed = 4.0f;     // units per second
+float tankTurnSpeed = 1.5f; // radians per second
 glm::vec3 tankPosition = glm::vec3(0.0f, 0.0f, 0.0f);
+
+float frameDt = 0.0f; // seconds since the previous frame
 
 
 GLuint shadowMapFBO;
@@ -198,22 +201,22 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos)
 
 void move(gps::MOVE_DIRECTION direction, float speed)
 {
-
+	float step = speed * frameDt;
 	switch (direction) {
 	case gps::MOVE_FORWARD:
-		tankPosition += glm::vec3(sin(angleF), 0.0f, cos(angleF));
+		tankPosition += step * glm::vec3(sin(angleF), 0.0f, cos(angleF));
 		break;
 	case gps::MOVE_BACKWARD:
-		tankPosition -= glm::vec3(sin(angleF), 0.0f, cos(angleF));
+		tankPosition -= step * glm::vec3(sin(angleF), 0.0f, cos(angleF));
 		break;
 	case gps::MOVE_RIGHT:
-		angleF -= 0.01f;
+		angleF -= tankTurnSpeed * frameDt;
 		break;
 	case gps::MOVE_LEFT:
-		angleF += 0.01f;
+		angleF += tankTurnSpeed * frameDt;
 		break;
 	}
-	}
+}
 
 bool isWireframe = false;
 
@@ -516,11 +519,8 @@ void updateFireLight(const glm::mat4& houseModel)
 // Advances the clock and uploads sun/moon direction, light colors, fog and sky tint.
 void updateDayNight()
 {
-	double now = glfwGetTime();
-	float dt = (float)(now - lastFrameTime);
-	lastFrameTime = now;
 	if (dayNightRunning)
-		timeOfDay = fmodf(timeOfDay + dt / DAY_LENGTH_SECONDS, 1.0f);
+		timeOfDay = fmodf(timeOfDay + frameDt / DAY_LENGTH_SECONDS, 1.0f);
 
 	// The sun moves on a circle in the XY plane (offset in Z so lookAt never sees a vertical
 	// direction); the moon is opposite. K/L still rotate the whole arc around Y.
@@ -561,6 +561,10 @@ void updateDayNight()
 void renderScene()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	double now = glfwGetTime();
+	frameDt = (float)glm::min(now - lastFrameTime, 0.1); // clamp so a stall doesn't teleport anything
+	lastFrameTime = now;
 
 	processMovement();
 	updateDayNight();
