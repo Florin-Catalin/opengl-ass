@@ -21,6 +21,7 @@
 #include "SkyBox.hpp"
 #include "Planets.hpp"
 #include "Rain.hpp"
+#include "Lightning.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -102,6 +103,12 @@ const int RAIN_MAX_DROPS = 12000;
 gps::Rain rain;
 gps::Shader rainShader;
 glm::vec3 rainColor = glm::vec3(0.6f);
+
+// Lightning: random strikes every 4-12 s while it rains hard; Z strikes immediately.
+gps::Lightning lightning;
+gps::Shader lightningShader;
+double nextStrikeTime = 0.0; // 0 = not scheduled
+void strikeLightning();
 GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
@@ -258,6 +265,9 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 
 	if (key == GLFW_KEY_M && action == GLFW_PRESS)
 		spawnMeteor();
+
+	if (key == GLFW_KEY_Z && action == GLFW_PRESS && rainAmount > 0.3f)
+		strikeLightning();
 
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 		raining = !raining;
@@ -575,6 +585,7 @@ void initModels()
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	rain.Init(RAIN_MAX_DROPS);
+	lightning.Init();
 
 	tankBounds = farmer.GetBounds();
 	houseBounds = house.GetMeshBounds();
@@ -590,6 +601,7 @@ void initShaders()
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
+	lightningShader.loadShader("shaders/lightning.vert", "shaders/lightning.frag");
 }
 
 void initUniforms()
@@ -778,6 +790,15 @@ void updateMeteors(GLuint program, float visibility)
 	}
 }
 
+// A bolt somewhere ahead of the camera (uses the previous frame's view, which is fine).
+void strikeLightning()
+{
+	glm::mat4 cameraToWorld = glm::inverse(view);
+	glm::vec3 cameraPos = glm::vec3(cameraToWorld[3]);
+	glm::vec3 forward = -glm::vec3(cameraToWorld[2]);
+	lightning.Strike(cameraPos, forward, glfwGetTime());
+}
+
 // Rain streaks around the camera, drawn last because they are transparent.
 void drawRain()
 {
@@ -891,6 +912,23 @@ void updateDayNight()
 	skyColor = lerp3(skyColor, glm::vec3(skyGrey), rainAmount * 0.8f);
 	rainColor = glm::min(ambient * 1.5f + directColor * 0.4f + glm::vec3(0.1f), glm::vec3(1.0f));
 
+	// Lightning while it rains hard. Each strike flashes the whole scene and lights the sky.
+	double now = glfwGetTime();
+	if (rainAmount > 0.8f) {
+		if (nextStrikeTime == 0.0)
+			nextStrikeTime = now + randomRange(2.0f, 6.0f); // first one soon after the storm builds
+		else if (now >= nextStrikeTime) {
+			strikeLightning();
+			nextStrikeTime = now + randomRange(4.0f, 12.0f);
+		}
+	}
+	else
+		nextStrikeTime = 0.0;
+	float flash = lightning.Flash(now) * glm::min(rainAmount * 1.5f, 1.0f);
+	ambient += glm::vec3(0.45f, 0.5f, 0.65f) * flash;
+	skyColor += glm::vec3(0.6f, 0.65f, 0.85f) * flash;
+	rainColor = glm::min(rainColor + glm::vec3(0.5f) * flash, glm::vec3(1.0f));
+
 	glm::vec3 fogColor = skyColor * 0.5f;
 
 	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
@@ -898,6 +936,8 @@ void updateDayNight()
 	cloudOffset += WIND_VELOCITY * frameDt;
 	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount);
 	cloudShadowColor = (ambient * 1.5f + skyColor * 0.1f) * (1.0f - 0.3f * rainAmount);
+	cloudLitColor += glm::vec3(0.5f, 0.55f, 0.75f) * flash; // clouds light up from inside
+	cloudShadowColor += glm::vec3(0.3f, 0.33f, 0.45f) * flash;
 
 	myCustomShader.useShaderProgram();
 	glUniform3fv(lightDirLoc, 1, glm::value_ptr(currentLightDir));
@@ -1260,6 +1300,7 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
+	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
 	drawRain();
 
 }
