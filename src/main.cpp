@@ -663,8 +663,6 @@ void renderScene()
 
 	//ground.Draw(myCustomShader);
 
-	mySkyBox.Draw(skyboxShader, view, projection);
-
 	//create model matrix for tents
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix data to shader
@@ -781,6 +779,8 @@ void renderScene()
 	model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
 	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	lightCube.Draw(lightShader);
+
+	mySkyBox.Draw(skyboxShader, view, projection);
 
 	//send light control value to shader
 	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
