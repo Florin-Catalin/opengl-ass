@@ -20,6 +20,7 @@ uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 lightSpaceTrMatrix;
+uniform vec4 clipPlane; // world-space plane for the puddle reflection pass (GL_CLIP_DISTANCE0)
 
 void main() 
 {
@@ -33,4 +34,5 @@ void main()
 	fragPos = model * vec4(vPosition, 1.0f);
 	normalWorld = mat3(model) * vNormal;
 	posModel = vPosition;
+	gl_ClipDistance[0] = dot(fragPos, clipPlane);
 }

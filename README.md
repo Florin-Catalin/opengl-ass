@@ -1,6 +1,6 @@
 ![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
 # OpenGL-Application
-A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that mirror the sky, shooting stars, fireflies at night, a flickering campfire light, fog, a skybox and shadow mapping.
+A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that reflect the camp and the sky, shooting stars, fireflies at night, a flickering campfire light, fog, a skybox and shadow mapping.
 
 ![Preview](UngureanuFlorin-Catalin_30434.png)
 

@@ -115,6 +115,10 @@ float puddleWetness = 0.0f;
 const float PUDDLE_FILL_SECONDS = 15.0f;
 const float PUDDLE_DRY_SECONDS = 90.0f;
 const GLint SKYBOX_TEXTURE_UNIT = 5; // the scene shader samples the sky cubemap here for puddles
+const GLint REFLECTION_TEXTURE_UNIT = 6;
+const float PUDDLE_PLANE_Y = 0.013f; // height of the flat camp floor in the terrain, where puddles form
+GLuint reflectionFBO = 0, reflectionTexture = 0, reflectionDepth = 0;
+int reflectionWidth = 0, reflectionHeight = 0;
 
 // Lightning: random strikes every 4-12 s while it rains hard; Z strikes immediately.
 gps::Lightning lightning;
@@ -155,6 +159,7 @@ float planetBrightness[gps::PLANET_COUNT];      // model radius ~10, so ~12 unit
 // Campfire inside the house model (center of its stone ring, in model space).
 const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
 bool fireOn = true;
+glm::vec3 fireJitter = glm::vec3(0.0f); // this frame's flame wobble, reused by the puddle reflection
 // 1 = burning normally, 0 = put out. Rain douses it over ~10 s; it is relit gradually once the
 // rain has fully stopped.
 float fireStrength = 1.0f;
@@ -667,6 +672,7 @@ void initUniforms()
 	fireIntensityLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireIntensity");
 	// samplerCube must not default to unit 0, where a 2D texture is bound.
 	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "skyboxCube"), SKYBOX_TEXTURE_UNIT);
+	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "reflectionMap"), REFLECTION_TEXTURE_UNIT);
 	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
 	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
 
@@ -813,6 +819,35 @@ void updateMeteors(GLuint program, float visibility)
 	}
 }
 
+// (Re)creates the puddle reflection target at the window's size.
+void ensureReflectionTarget()
+{
+	if (reflectionFBO != 0 && reflectionWidth == retina_width && reflectionHeight == retina_height)
+		return;
+	if (reflectionFBO == 0) {
+		glGenFramebuffers(1, &reflectionFBO);
+		glGenTextures(1, &reflectionTexture);
+		glGenRenderbuffers(1, &reflectionDepth);
+	}
+	reflectionWidth = retina_width;
+	reflectionHeight = retina_height;
+	glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, reflectionWidth, reflectionHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindRenderbuffer(GL_RENDERBUFFER, reflectionDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, reflectionWidth, reflectionHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, reflectionTexture, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, reflectionDepth);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		fprintf(stderr, "puddle reflection framebuffer is incomplete\n");
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 // Everything the scene shader needs to draw reflective puddles (it must be bound).
 void uploadPuddleUniforms()
 {
@@ -829,7 +864,12 @@ void uploadPuddleUniforms()
 	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
 	glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_UNIT);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, mySkyBox.GetTextureId());
+	glActiveTexture(GL_TEXTURE0 + REFLECTION_TEXTURE_UNIT);
+	glBindTexture(GL_TEXTURE_2D, reflectionTexture);
 	glActiveTexture(GL_TEXTURE0);
+	glUniform1f(glGetUniformLocation(p, "puddlePlaneY"), PUDDLE_PLANE_Y);
+	glUniform2f(glGetUniformLocation(p, "screenSize"), (float)retina_width, (float)retina_height);
+	glUniform1f(glGetUniformLocation(p, "hasReflection"), puddleWetness > 0.0f ? 1.0f : 0.0f);
 }
 
 // Fireflies come out after dusk and hide when it rains.
@@ -895,12 +935,19 @@ static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
 
 // Uploads the campfire light. Needs the current view matrix and the house's model matrix,
 // because the fire is part of the house model.
+// Uploads the fire's eye-space position for the current view.
+void updateFirePosition(const glm::mat4& houseModel)
+{
+	glm::vec3 posEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + fireJitter, 1.0f));
+	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(posEye));
+}
+
 void updateFireLight(const glm::mat4& houseModel)
 {
 	float t = (float)glfwGetTime();
 	// Layered sines give an irregular flicker without needing a noise function.
 	float flicker = 1.0f + 0.12f * sinf(t * 11.0f) + 0.08f * sinf(t * 23.0f + 1.3f) + 0.05f * sinf(t * 47.0f + 0.7f);
-	glm::vec3 jitter = glm::vec3(0.03f * sinf(t * 7.0f), 0.05f * sinf(t * 13.0f + 2.0f), 0.03f * sinf(t * 5.0f + 1.0f));
+	fireJitter = glm::vec3(0.03f * sinf(t * 7.0f), 0.05f * sinf(t * 13.0f + 2.0f), 0.03f * sinf(t * 5.0f + 1.0f));
 
 	// Rain puts the fire out; it comes back only after the rain is completely gone.
 	if (rainAmount > 0.2f)
@@ -916,11 +963,10 @@ void updateFireLight(const glm::mat4& houseModel)
 
 	// The fire burns all the time but only stands out once the sun is low.
 	float intensity = fireOn ? flicker * fireStrength * (0.35f + 2.65f * nightFactor) : 0.0f;
-	glm::vec3 posEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + jitter, 1.0f));
+	updateFirePosition(houseModel);
 	// A dying fire is redder: only embers left.
 	glm::vec3 color = glm::vec3(1.0f, (0.55f + 0.05f * sinf(t * 17.0f)) * (0.45f + 0.55f * fireStrength), 0.2f * fireStrength);
 
-	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(posEye));
 	glUniform3fv(fireColorLoc, 1, glm::value_ptr(color));
 	glUniform1f(fireIntensityLoc, intensity);
 }
@@ -1032,6 +1078,181 @@ void updateDayNight()
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
 
 	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
+}
+
+// Draws every model with myCustomShader (bound) using the current global view.
+void drawSceneObjects(bool withTerrain)
+{
+	//create model matrix for nanosuit
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//send model matrix data to shader	
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+	//myModel.Draw(myCustomShader);
+
+	////create model matrix for ground
+	//model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+	////send model matrix data to shader
+	//glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+	////create normal matrix
+	//normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	////send normal matrix data to shader
+	//glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+	//ground.Draw(myCustomShader);
+
+	//create model matrix for tents
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	tents.Draw(myCustomShader);
+
+	//create model matrix for grass
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	// Puddles only form on the terrain, not on roofs or the tank. The terrain is left out of the
+	// puddle reflection: it lies under the mirror plane anyway.
+	if (withTerrain) {
+		glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 1.0f);
+		grass.Draw(myCustomShader);
+		glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
+	}
+
+
+	
+
+	//create model matrix for house
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	house.Draw(myCustomShader);
+
+	
+	
+
+	//create model matrix for ufo
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(birdAngle), glm::vec3(0, 1, 0));	
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	bird.Draw(myCustomShader);
+	
+	//create model matrix for tank
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	model = glm::translate(model, glm::vec3(0, distanceRocket, 0));
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	if (distanceRocket >= 2 && birdAngle >= 330 && birdAngle <= 350) {
+		invisibilistyt = true;
+	} 
+
+	if (invisibilistyt == true) {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
+		tank.Draw(myCustomShader);
+		glDisable(GL_BLEND);
+	}
+	else
+	{
+		tank.Draw(myCustomShader);
+	}
+	
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	//tank.Draw(myCustomShader);
+
+	
+	
+
+	
+
+	//create model matrix for farmer
+	model = tankModelMatrix();
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	farmer.Draw(myCustomShader);
+
+	//create model matrix for wood
+	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//send model matrix data to shader
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	//compute normal matrix
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	//send normal matrix data to shader
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	wood.Draw(myCustomShader);
+}
+
+// Puddle reflections: the models drawn mirrored below the camp floor into reflectionFBO.
+// The puddle shader samples it at its own screen position; where nothing was drawn
+// (alpha 0) it falls back to the sky/cloud/moon reflection.
+void renderPuddleReflection(const glm::mat4& houseModel)
+{
+	ensureReflectionTarget();
+	GLuint p = myCustomShader.shaderProgram;
+	glm::mat4 cameraView = view;
+
+	// Mirror about the plane y = PUDDLE_PLANE_Y.
+	glm::mat4 mirror = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, PUDDLE_PLANE_Y, 0.0f)) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, 1.0f)) *
+		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -PUDDLE_PLANE_Y, 0.0f));
+	view = cameraView * mirror;
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix3fv(lightDirMatrixLoc, 1, GL_FALSE, glm::value_ptr(glm::mat3(glm::inverseTranspose(view))));
+	glm::vec3 fireEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + fireJitter, 1.0f));
+	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(fireEye));
+	// Keep only what is above the floor (a small margin hides the seam where objects touch it).
+	glUniform4f(glGetUniformLocation(p, "clipPlane"), 0.0f, 1.0f, 0.0f, -(PUDDLE_PLANE_Y - 0.02f));
+	glEnable(GL_CLIP_DISTANCE0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
+	glViewport(0, 0, reflectionWidth, reflectionHeight);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	drawSceneObjects(false);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+	glDisable(GL_CLIP_DISTANCE0);
+
+	// Back to the real camera.
+	view = cameraView;
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix3fv(lightDirMatrixLoc, 1, GL_FALSE, glm::value_ptr(lightDirMatrix));
+	updateFirePosition(houseModel);
 }
 
 void renderScene()
@@ -1214,10 +1435,19 @@ void renderScene()
 	// lamp toggle (H/J); must be sent while this program is bound
 	glUniform1i(lightsOnLoc, lightsOn);
 	setCloudUniforms(myCustomShader.shaderProgram);
-	uploadPuddleUniforms();
 
 	// same model matrix the house is drawn with below
-	updateFireLight(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0)));
+	glm::mat4 houseModel = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	updateFireLight(houseModel);
+
+	// Shadows are needed by the reflection pass too.
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, depthMapTexture);
+	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
+	if (puddleWetness > 0.0f)
+		renderPuddleReflection(houseModel);
+	uploadPuddleUniforms(); // binds the reflection for sampling, now that it is drawn
 
 	glViewport(0, 0, retina_width, retina_height);
 	myCustomShader.useShaderProgram();
@@ -1227,135 +1457,7 @@ void renderScene()
 	glBindTexture(GL_TEXTURE_2D, depthMapTexture);
 	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
 
-	//create model matrix for nanosuit
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	//send model matrix data to shader	
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-
-	//myModel.Draw(myCustomShader);
-
-	////create model matrix for ground
-	//model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-	////send model matrix data to shader
-	//glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-	////create normal matrix
-	//normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	////send normal matrix data to shader
-	//glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-
-	//ground.Draw(myCustomShader);
-
-	//create model matrix for tents
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	tents.Draw(myCustomShader);
-
-	//create model matrix for grass
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	// Puddles only form on the terrain, not on roofs or the tank.
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 1.0f);
-	grass.Draw(myCustomShader);
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
-
-
-	
-
-	//create model matrix for house
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	house.Draw(myCustomShader);
-
-	
-	
-
-	//create model matrix for ufo
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(birdAngle), glm::vec3(0, 1, 0));	
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	bird.Draw(myCustomShader);
-	
-	//create model matrix for tank
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	model = glm::translate(model, glm::vec3(0, distanceRocket, 0));
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	if (distanceRocket >= 2 && birdAngle >= 330 && birdAngle <= 350) {
-		invisibilistyt = true;
-	} 
-
-	if (invisibilistyt == true) {
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR);
-		tank.Draw(myCustomShader);
-		glDisable(GL_BLEND);
-	}
-	else
-	{
-		tank.Draw(myCustomShader);
-	}
-	
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	//tank.Draw(myCustomShader);
-
-	
-	
-
-	
-
-	//create model matrix for farmer
-	model = tankModelMatrix();
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	farmer.Draw(myCustomShader);
-
-	//create model matrix for wood
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
-	//send model matrix data to shader
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-	//compute normal matrix
-	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
-	//send normal matrix data to shader
-	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-	wood.Draw(myCustomShader);
+	drawSceneObjects(true);
 
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));

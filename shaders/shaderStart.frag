@@ -47,6 +47,10 @@ uniform float moonVisibility;
 uniform vec3 cloudLitColor;
 uniform vec3 cloudShadowColor;
 uniform float time;
+uniform sampler2D reflectionMap; // the models drawn mirrored under the floor (alpha 1 where present)
+uniform float hasReflection;
+uniform vec2 screenSize;
+uniform float puddlePlaneY;     // the mirror plane; puddles form only on ground at this height
 
 
 //fog
@@ -209,7 +213,8 @@ vec3 applyPuddles(vec3 color)
 	float flatness = smoothstep(0.9f, 0.97f, normalize(normalWorld).y);
 	float n = cloudFbm(posModel.xz * 0.18f + vec2(37.0f, 11.0f));
 	float threshold = mix(0.78f, 0.58f, puddleWetness);             // wetter -> bigger puddles
-	float puddle = smoothstep(threshold, threshold + 0.04f, n) * flatness;
+	float onFloor = 1.0f - smoothstep(0.08f, 0.2f, abs(fragPos.y - puddlePlaneY)); // the mirror only matches there
+	float puddle = smoothstep(threshold, threshold + 0.04f, n) * flatness * onFloor;
 	float damp = smoothstep(threshold - 0.08f, threshold, n) * flatness;
 	color *= 1.0f - 0.35f * damp * puddleWetness;                    // dark wet ground around them
 	if (puddle <= 0.0f)
@@ -224,7 +229,14 @@ vec3 applyPuddles(vec3 color)
 	// Water reflects little straight down and almost everything at grazing angles (Fresnel).
 	float fresnel = 0.04f + 0.96f * pow(1.0f - max(dot(N, V), 0.0f), 5.0f);
 	float reflectivity = mix(0.35f, 1.0f, fresnel);
-	vec3 water = mix(color * 0.5f, reflectedSky(R), reflectivity);
+	vec3 mirrored = reflectedSky(R);
+	if (hasReflection > 0.5f) {
+		// The mirrored models at this pixel, wobbled by the ripples.
+		vec2 uv = gl_FragCoord.xy / screenSize + tilt * 0.04f;
+		vec4 objects = texture(reflectionMap, uv);
+		mirrored = mix(mirrored, objects.rgb, objects.a);
+	}
+	vec3 water = mix(color * 0.5f, mirrored, reflectivity);
 	return mix(color, water, puddle);
 }
 
