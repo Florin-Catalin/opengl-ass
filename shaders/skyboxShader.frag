@@ -53,9 +53,24 @@ vec3 planet(vec3 dir, int i)
 	if (b <= 0.0)
 		return vec3(0.0);
 	float d = length(dir - planetDir[i]);
-	float core = smoothstep(0.0012 + 0.0016 * b, 0.0, d) * min(b, 1.0);
-	float glow = exp(-d / (0.003 * b)) * 0.35 * b;
+	float core = smoothstep(0.0025 + 0.003 * b, 0.0, d) * min(b, 1.0);
+	float glow = exp(-d / (0.005 * b)) * 0.35 * b;
 	return planetColor[i] * (core + glow);
+}
+
+// 0 right next to a visible planet, 1 away from all of them. Thins out the stars around each
+// planet (about 3 degrees across) so the planet stands out.
+float starMaskNearPlanets(vec3 dir)
+{
+	float mask = 1.0;
+	for (int i = 0; i < PLANET_COUNT; i++) {
+		float b = min(planetBrightness[i], 1.0);
+		if (b <= 0.0)
+			continue;
+		float d = length(dir - planetDir[i]);
+		mask = min(mask, mix(1.0, smoothstep(0.015, 0.05, d), b));
+	}
+	return mask;
 }
 
 void main()
@@ -69,7 +84,7 @@ void main()
 		vec3 starDir = starRotation * dir;
 		vec3 stars = starLayer(starDir, 90.0, 0.06, 0.22, 1.2)   // sparse, bright
 		           + starLayer(starDir, 220.0, 0.05, 0.25, 0.6); // dense, faint
-		color.rgb += stars * starVisibility * horizonFade;
+		color.rgb += stars * starVisibility * horizonFade * starMaskNearPlanets(dir);
 	}
 
 	vec3 planets = vec3(0.0);
