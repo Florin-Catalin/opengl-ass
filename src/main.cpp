@@ -24,6 +24,7 @@
 #include "Lightning.hpp"
 #include "Fireflies.hpp"
 #include "Snow.hpp"
+#include "Tornado.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -133,7 +134,23 @@ gps::Rain sand;                       // the rain streak renderer, blown sideway
 glm::vec3 dustColor = glm::vec3(0.7f, 0.5f, 0.3f);
 glm::vec2 dustOffset = glm::vec2(0.0f); // how far the dust billows have blown
 
-// The largest of rainAmount, snowAmount and sandAmount: how much the weather closes in.
+// Tornado, toggled with O: the funnel grows down from the clouds, wanders across the valley and
+// thins and lifts when switched off. tornadoAmount eases between 0 and 1.
+bool tornadoOn = false;
+float tornadoAmount = 0.0f;
+const float TORNADO_FORM_SECONDS = 8.0f;
+const float TORNADO_FUNNEL_HEIGHT = 115.0f; // its top sits in the cloud sheet (CLOUD_HEIGHT 120)
+double tornadoSpawnTime = 0.0;
+float tornadoPhase = 0.0f;                  // where along its wandering path it starts
+glm::vec3 tornadoBase = glm::vec3(0.0f);
+float tornadoShake = 0.0f;                  // 0..1, camera shake when it is close
+// This frame's lighting from updateDayNight(), for effects drawn with their own shaders.
+glm::vec3 ambientNow = glm::vec3(0.2f), directNow = glm::vec3(1.0f), fogColorNow = glm::vec3(0.5f);
+gps::Tornado tornado;
+gps::Shader tornadoShader;
+gps::Shader tornadoDebrisShader;
+
+// The largest of rainAmount, snowAmount, sandAmount and tornadoAmount: how much the weather closes in.
 float overcast = 0.0f;
 
 // Puddles: fill up while it rains (about 15 s) and dry slowly afterwards (about 90 s).
@@ -335,6 +352,15 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 		if (snowing) {
 			raining = false; // no rainbow: it changed to snow, it didn't clear up
 			sandstorm = false;
+		}
+	}
+
+	if (key == GLFW_KEY_O && action == GLFW_PRESS)
+	{
+		tornadoOn = !tornadoOn;
+		if (tornadoOn && tornadoAmount <= 0.0f) {
+			tornadoSpawnTime = glfwGetTime();
+			tornadoPhase = rand() / (float)RAND_MAX * 6.2831853f;
 		}
 	}
 
@@ -659,6 +685,7 @@ void initModels()
 	rain.Init(RAIN_MAX_DROPS);
 	snow.Init(SNOW_MAX_FLAKES);
 	sand.Init(SAND_MAX_GRAINS);
+	tornado.Init(64, 48, 3000);
 	lightning.Init();
 	// The camp floor is around y = 0; the house, tents and wood pile lie within this box.
 	fireflies.Init(FIREFLY_COUNT, glm::vec3(-14.0f, 0.3f, -14.0f), glm::vec3(14.0f, 2.2f, 10.0f));
@@ -677,6 +704,8 @@ void initShaders()
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
 	snowShader.loadShader("shaders/snow.vert", "shaders/snow.frag");
+	tornadoShader.loadShader("shaders/tornado.vert", "shaders/tornado.frag");
+	tornadoDebrisShader.loadShader("shaders/tornadoDebris.vert", "shaders/tornadoDebris.frag");
 	lightningShader.loadShader("shaders/lightning.vert", "shaders/lightning.frag");
 	firefliesShader.loadShader("shaders/fireflies.vert", "shaders/fireflies.frag");
 }
@@ -965,6 +994,52 @@ void drawSand()
 	sand.Draw(rainShader, sandAmount);
 }
 
+// The tornado funnel and the debris whirling around its foot.
+void drawTornado()
+{
+	if (tornadoAmount <= 0.0f)
+		return;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	float t = (float)glfwGetTime();
+	float extent = glm::smoothstep(0.0f, 0.75f, tornadoAmount);  // touches down after the funnel forms
+	float width = glm::smoothstep(0.3f, 1.0f, tornadoAmount);    // a thin rope as it forms and dies
+	glm::vec3 dustLight = ambientNow * 2.2f + directNow * 0.6f;
+
+	gps::Shader* shaders[2] = { &tornadoShader, &tornadoDebrisShader };
+	for (int i = 0; i < 2; i++) {
+		GLuint p = shaders[i]->shaderProgram;
+		shaders[i]->useShaderProgram();
+		glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniform3fv(glGetUniformLocation(p, "tornadoBase"), 1, glm::value_ptr(tornadoBase));
+		glUniform1f(glGetUniformLocation(p, "funnelHeight"), TORNADO_FUNNEL_HEIGHT);
+		glUniform1f(glGetUniformLocation(p, "tornadoTime"), t);
+		glUniform1f(glGetUniformLocation(p, "tornadoWidth"), width);
+		glUniform1f(glGetUniformLocation(p, "visibility"), glm::smoothstep(0.0f, 0.3f, tornadoAmount));
+	}
+
+	GLuint f = tornadoShader.shaderProgram;
+	tornadoShader.useShaderProgram();
+	glUniform3fv(glGetUniformLocation(f, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(glGetUniformLocation(f, "lightDirWorld"), 1, glm::value_ptr(glm::normalize(currentLightDir)));
+	glUniform3fv(glGetUniformLocation(f, "lightColor"), 1, glm::value_ptr(directNow));
+	glUniform3fv(glGetUniformLocation(f, "ambientLight"), 1, glm::value_ptr(ambientNow));
+	glUniform3fv(glGetUniformLocation(f, "fogColor"), 1, glm::value_ptr(fogColorNow));
+	glUniform1f(glGetUniformLocation(f, "extent"), extent);
+	glUniform1f(glGetUniformLocation(f, "shellScale"), 1.0f);
+	tornado.DrawFunnel(tornadoShader);
+	glUniform1f(glGetUniformLocation(f, "shellScale"), 1.45f);
+	tornado.DrawFunnel(tornadoShader);
+
+	GLuint d = tornadoDebrisShader.shaderProgram;
+	tornadoDebrisShader.useShaderProgram();
+	glUniform1f(glGetUniformLocation(d, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniform3fv(glGetUniformLocation(d, "dustLight"), 1, glm::value_ptr(glm::min(dustLight, glm::vec3(1.2f))));
+	// Debris only once the funnel has reached the ground.
+	glUniform1f(glGetUniformLocation(d, "visibility"), glm::smoothstep(0.6f, 0.9f, tornadoAmount));
+	tornado.DrawDebris(tornadoDebrisShader);
+}
+
 // Fireflies come out after dusk and hide when it rains.
 void drawFireflies()
 {
@@ -1053,8 +1128,9 @@ void updateFireLight(const glm::mat4& houseModel)
 	float dousing = rainAmount * 4.0f * fireStrength * (1.0f - fireStrength); // 0..1, peaks at 0.5
 	float sputter = 0.5f + 0.5f * sinf(t * 13.0f + 3.0f * sinf(t * 1.7f));
 	flicker *= 1.0f - 0.7f * dousing * sputter;
-	// Gusts in a sandstorm whip the flames about.
-	flicker *= 1.0f + sandAmount * (0.25f * sinf(t * 9.0f + 2.0f * sinf(t * 2.3f)) - 0.1f);
+	// Gusts in a sandstorm or near a tornado whip the flames about.
+	float gusts = glm::max(sandAmount, tornadoShake);
+	flicker *= 1.0f + gusts * (0.25f * sinf(t * 9.0f + 2.0f * sinf(t * 2.3f)) - 0.1f);
 
 	// The fire burns all the time but only stands out once the sun is low.
 	float intensity = fireOn ? flicker * fireStrength * (0.35f + 2.65f * nightFactor) : 0.0f;
@@ -1131,7 +1207,9 @@ void updateDayNight()
 	float sandTarget = sandstorm ? 1.0f : 0.0f;
 	float sandStep = frameDt / SAND_FADE_SECONDS;
 	sandAmount += glm::clamp(sandTarget - sandAmount, -sandStep, sandStep);
-	overcast = glm::max(glm::max(rainAmount, snowAmount), sandAmount);
+	float tornadoStep = frameDt / TORNADO_FORM_SECONDS;
+	tornadoAmount += glm::clamp((tornadoOn ? 1.0f : 0.0f) - tornadoAmount, -tornadoStep, tornadoStep);
+	overcast = glm::max(glm::max(rainAmount, snowAmount), glm::max(sandAmount, tornadoAmount));
 	directColor *= 1.0f - 0.5f * snowAmount;
 	moonGlow *= 1.0f - snowAmount;
 	float snowGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.85f;
@@ -1149,6 +1227,19 @@ void updateDayNight()
 	skyColor = lerp3(skyColor, dustColor, sandAmount * 0.6f);
 	dustOffset += WIND_VELOCITY * frameDt * (2.0f + 4.0f * sandAmount);
 	puddleWetness -= frameDt * sandAmount / 20.0f; // the hot wind dries them
+
+	// Tornado weather: a dark supercell sky with a sickly green tint, and dim light.
+	directColor *= 1.0f - 0.45f * tornadoAmount;
+	moonGlow *= 1.0f - tornadoAmount;
+	float stormGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.45f;
+	skyColor = lerp3(skyColor, glm::vec3(stormGrey) * glm::vec3(0.82f, 1.0f, 0.85f), tornadoAmount * 0.85f);
+
+	// It wanders on a slow looping path over the canyon floor that brings it through the camp.
+	float tt = (float)(glfwGetTime() - tornadoSpawnTime) * 0.08f + tornadoPhase;
+	tornadoBase = glm::vec3(15.0f * sinf(tt), -0.5f, 12.0f * sinf(tt * 0.73f + 1.3f));
+	glm::vec3 cameraPosNow = myCamera.getCameraPosition();
+	float tornadoDistance = glm::length(glm::vec2(cameraPosNow.x - tornadoBase.x, cameraPosNow.z - tornadoBase.z));
+	tornadoShake = tornadoAmount * (1.0f - glm::smoothstep(8.0f, 45.0f, tornadoDistance));
 
 	if (snowAmount > 0.2f)
 		snowCover += frameDt * snowAmount / SNOW_COVER_SECONDS;
@@ -1190,7 +1281,7 @@ void updateDayNight()
 
 	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
 	// blue-grey under the moon, near-black silhouettes on a moonless night.
-	cloudOffset += WIND_VELOCITY * frameDt * (1.0f + 5.0f * sandAmount); // a storm wind
+	cloudOffset += WIND_VELOCITY * frameDt * (1.0f + 5.0f * sandAmount + 2.0f * tornadoAmount); // a storm wind
 	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount - 0.15f * snowAmount);
 	cloudShadowColor = (ambient * 1.5f + skyColor * 0.1f) * (1.0f - 0.3f * rainAmount);
 	cloudLitColor += glm::vec3(0.5f, 0.55f, 0.75f) * flash; // clouds light up from inside
@@ -1201,6 +1292,9 @@ void updateDayNight()
 	glUniform3fv(lightColorLoc, 1, glm::value_ptr(directColor));
 	glUniform3fv(ambientLightLoc, 1, glm::value_ptr(ambient));
 	glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogColor));
+	ambientNow = ambient;
+	directNow = directColor;
+	fogColorNow = fogColor;
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowAmount"), snowAmount);
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowCover"), snowCover);
@@ -1552,6 +1646,14 @@ void renderScene()
 
 	//send view matrix to shader
 	view = myCamera.getViewMatrix();
+	if (tornadoShake > 0.0f) {
+		// The ground rumbles and the wind buffets the view when the tornado is close.
+		float t = (float)now;
+		float yaw = (sinf(t * 31.0f) * 0.6f + sinf(t * 17.3f + 1.0f) * 0.4f) * 0.8f * tornadoShake;
+		float pitch = (sinf(t * 27.0f + 2.0f) * 0.6f + sinf(t * 13.7f) * 0.4f) * 0.6f * tornadoShake;
+		view = glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1, 0, 0)) *
+			glm::rotate(glm::mat4(1.0f), glm::radians(yaw), glm::vec3(0, 1, 0)) * view;
+	}
 	glUniformMatrix4fv(glGetUniformLocation(myCustomShader.shaderProgram, "view"),
 		1,
 		GL_FALSE,
@@ -1616,6 +1718,7 @@ void renderScene()
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
+	drawTornado();
 	drawFireflies();
 	drawRain();
 	drawSnow();

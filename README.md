@@ -1,6 +1,6 @@
 ![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
 # OpenGL-Application
-A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that reflect the camp and the sky, snow that settles on the ground and melts, sandstorms, shooting stars, fireflies at night, a flickering campfire light, fog, a skybox and shadow mapping.
+A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that reflect the camp and the sky, snow that settles on the ground and melts, sandstorms, a tornado, shooting stars, fireflies at night, a flickering campfire light, fog, a skybox and shadow mapping.
 
 ![Preview](UngureanuFlorin-Catalin_30434.png)
 
@@ -43,6 +43,7 @@ cmake --build build --target run
 | R | Start / stop rain (lightning strikes on its own in heavy rain; stop it with a low sun for a rainbow) |
 | V | Start / stop snow (it settles on upward-facing surfaces and melts afterwards) |
 | U | Start / stop a sandstorm |
+| O | Tornado: touches down, wanders through the canyon (the camera shakes when it is close); O again lifts it |
 | Z | Lightning strike now (while raining) |
 | M | Shooting star (about 1 in 8 is a green fireball) |
 | F / G | Fog on / off |
