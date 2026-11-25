@@ -33,6 +33,34 @@ namespace gps {
 			meshes[i].Draw(shaderProgram);
 	}
 
+	std::vector<gps::Bounds> Model3D::GetMeshBounds() const
+	{
+		std::vector<gps::Bounds> result;
+		for (size_t i = 0; i < meshes.size(); i++) {
+			const std::vector<gps::Vertex>& v = meshes[i].vertices;
+			if (v.empty())
+				continue;
+			gps::Bounds b = { v[0].Position, v[0].Position };
+			for (size_t j = 1; j < v.size(); j++) {
+				b.min = glm::min(b.min, v[j].Position);
+				b.max = glm::max(b.max, v[j].Position);
+			}
+			result.push_back(b);
+		}
+		return result;
+	}
+
+	gps::Bounds Model3D::GetBounds() const
+	{
+		std::vector<gps::Bounds> parts = GetMeshBounds();
+		gps::Bounds b = { glm::vec3(0.0f), glm::vec3(0.0f) };
+		for (size_t i = 0; i < parts.size(); i++) {
+			b.min = i == 0 ? parts[i].min : glm::min(b.min, parts[i].min);
+			b.max = i == 0 ? parts[i].max : glm::max(b.max, parts[i].max);
+		}
+		return b;
+	}
+
 	// Does the parsing of the .obj file and fills in the data structure
 	void Model3D::ReadOBJ(std::string fileName, std::string basePath){
 

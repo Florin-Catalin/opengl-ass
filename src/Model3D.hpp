@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "Mesh.hpp"
+#include "Collision.hpp"
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
@@ -31,6 +32,12 @@ namespace gps {
 		Model3D(std::string fileName, std::string basePath);
 
 		void Draw(gps::Shader shaderProgram);
+
+		// Model-space bounds of each component mesh (one per OBJ shape).
+		std::vector<gps::Bounds> GetMeshBounds() const;
+
+		// Model-space bounds of the whole model.
+		gps::Bounds GetBounds() const;
 
     private:
 		// Component meshes - group of objects
