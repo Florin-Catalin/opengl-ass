@@ -137,6 +137,11 @@ float planetBrightness[gps::PLANET_COUNT];      // model radius ~10, so ~12 unit
 // Campfire inside the house model (center of its stone ring, in model space).
 const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
 bool fireOn = true;
+// 1 = burning normally, 0 = put out. Rain douses it over ~10 s; it is relit gradually once the
+// rain has fully stopped.
+float fireStrength = 1.0f;
+const float FIRE_DOUSE_SECONDS = 10.0f;
+const float FIRE_RELIGHT_SECONDS = 8.0f;
 GLuint fireLightPosEyeLoc;
 GLuint fireColorLoc;
 GLuint fireIntensityLoc;
@@ -833,10 +838,23 @@ void updateFireLight(const glm::mat4& houseModel)
 	float flicker = 1.0f + 0.12f * sinf(t * 11.0f) + 0.08f * sinf(t * 23.0f + 1.3f) + 0.05f * sinf(t * 47.0f + 0.7f);
 	glm::vec3 jitter = glm::vec3(0.03f * sinf(t * 7.0f), 0.05f * sinf(t * 13.0f + 2.0f), 0.03f * sinf(t * 5.0f + 1.0f));
 
+	// Rain puts the fire out; it comes back only after the rain is completely gone.
+	if (rainAmount > 0.2f)
+		fireStrength -= frameDt * rainAmount / FIRE_DOUSE_SECONDS;
+	else if (rainAmount <= 0.0f)
+		fireStrength += frameDt / FIRE_RELIGHT_SECONDS;
+	fireStrength = glm::clamp(fireStrength, 0.0f, 1.0f);
+
+	// A fire that is being doused sputters: deep irregular dips, strongest when half out.
+	float dousing = rainAmount * 4.0f * fireStrength * (1.0f - fireStrength); // 0..1, peaks at 0.5
+	float sputter = 0.5f + 0.5f * sinf(t * 13.0f + 3.0f * sinf(t * 1.7f));
+	flicker *= 1.0f - 0.7f * dousing * sputter;
+
 	// The fire burns all the time but only stands out once the sun is low.
-	float intensity = fireOn ? flicker * (0.35f + 2.65f * nightFactor) : 0.0f;
+	float intensity = fireOn ? flicker * fireStrength * (0.35f + 2.65f * nightFactor) : 0.0f;
 	glm::vec3 posEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + jitter, 1.0f));
-	glm::vec3 color = glm::vec3(1.0f, 0.55f + 0.05f * sinf(t * 17.0f), 0.2f);
+	// A dying fire is redder: only embers left.
+	glm::vec3 color = glm::vec3(1.0f, (0.55f + 0.05f * sinf(t * 17.0f)) * (0.45f + 0.55f * fireStrength), 0.2f * fireStrength);
 
 	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(posEye));
 	glUniform3fv(fireColorLoc, 1, glm::value_ptr(color));
