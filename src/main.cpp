@@ -153,7 +153,8 @@ GLuint fireColorLoc;
 GLuint fireIntensityLoc;
 float nightFactor = 0.0f; // 0 at day, 1 at night
 
-gps::Camera myCamera(glm::vec3(0.0f, 0.125f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+// Start a little above the camp, looking over the tank and tents towards the hills.
+gps::Camera myCamera(glm::vec3(0.0f, 3.5f, 10.0f), glm::vec3(-1.5f, 1.5f, -4.0f));
 GLfloat cameraSpeed = 0.05f;
 
 bool pressedKeys[1024];
