@@ -1,6 +1,6 @@
 ![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
 # OpenGL-Application
-A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and moon, fog, a skybox and shadow mapping.
+A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and moon, a flickering campfire light, fog, a skybox and shadow mapping.
 
 ![Preview](UngureanuFlorin-Catalin_30434.png)
 
@@ -39,6 +39,7 @@ cmake --build build --target run
 | N | Pause / resume the day/night cycle |
 | T | Skip ahead 3 hours |
 | F / G | Fog on / off |
+| B | Campfire light on / off |
 | H / J | Lamp (warm point light) on / off |
 | X | Toggle wireframe |
 | Arrow keys | Move the goat |

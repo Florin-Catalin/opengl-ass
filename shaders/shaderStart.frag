@@ -24,6 +24,11 @@ uniform int lightsOn;
 uniform vec3 ambientLight;
 uniform vec3 pointLightColor;
 
+//campfire: flickering point light, position given in eye space
+uniform vec3 fireLightPosEye;
+uniform vec3 fireColor;
+uniform float fireIntensity;
+
 
 //fog
 uniform	vec3 startFog;
@@ -116,6 +121,29 @@ void computePointLight()
     specular += pointLightColor * spec * pointSpecularStrenght * attenuation;
 }
 
+// Campfire light: diffuse + Blinn-Phong specular, all in eye space.
+// Returns the light added on top of the textured color.
+vec3 computeFireLight(vec3 albedo, vec3 specMap)
+{
+	if (fireIntensity <= 0.0f)
+		return vec3(0.0f);
+
+	vec3 normalEye = normalize(normalMatrix * normal);
+	vec3 toLight = fireLightPosEye - fragPosEye.xyz;
+	float dist = length(toLight);
+	vec3 L = toLight / dist;
+	vec3 V = normalize(-fragPosEye.xyz);
+	vec3 H = normalize(L + V);
+
+	float attenuation = fireIntensity / (1.0f + 0.35f * dist + 0.25f * dist * dist);
+	float diff = max(dot(normalEye, L), 0.0f);
+	// Keep a small specular floor so the fire glints on surfaces whose specular map is black.
+	float spec = diff > 0.0f ? pow(max(dot(normalEye, H), 0.0f), 48.0f) : 0.0f;
+	vec3 specStrength = max(specMap, vec3(0.25f));
+
+	return fireColor * attenuation * (diff * albedo + 1.5f * spec * specStrength);
+}
+
 float computeFog()
 {
  float fogDensity = 0.010f;
@@ -137,14 +165,18 @@ void main()
 		 
 	float shadow = computeShadow();
 	
+	vec3 albedo = vec3(texture(diffuseTexture, fragTexCoords));
+	vec3 specMap = vec3(texture(specularTexture, fragTexCoords));
+
 	//modulate with diffuse map
-	ambient *= vec3(texture(diffuseTexture, fragTexCoords));
-	diffuse *= vec3(texture(diffuseTexture, fragTexCoords));
-	//modulate woth specular map
-	specular *= vec3(texture(specularTexture, fragTexCoords));
+	ambient *= albedo;
+	diffuse *= albedo;
+	//modulate with specular map
+	specular *= specMap;
 	
-	//modulate with shadow
-	vec3 color = min((ambient + (1.0f - shadow)*diffuse) + (1.0f - shadow)*specular, 1.0f);
+	//modulate with shadow (the sun/moon shadow map does not apply to the fire)
+	vec3 color = min((ambient + (1.0f - shadow)*diffuse) + (1.0f - shadow)*specular
+		+ computeFireLight(albedo, specMap), 1.0f);
     vec3 colorFinal = min(color, 1.0f);
 
 	if (startFog.x==1.0f){

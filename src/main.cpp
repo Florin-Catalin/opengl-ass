@@ -70,6 +70,14 @@ GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
 
+// Campfire inside the house model (center of its stone ring, in model space).
+const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
+bool fireOn = true;
+GLuint fireLightPosEyeLoc;
+GLuint fireColorLoc;
+GLuint fireIntensityLoc;
+float nightFactor = 0.0f; // 0 at day, 1 at night
+
 gps::Camera myCamera(glm::vec3(0.0f, 0.125f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 GLfloat cameraSpeed = 0.05f;
 
@@ -167,6 +175,9 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 
 	if (key == GLFW_KEY_N && action == GLFW_PRESS)
 		dayNightRunning = !dayNightRunning;
+
+	if (key == GLFW_KEY_B && action == GLFW_PRESS)
+		fireOn = !fireOn;
 
 	if (key == GLFW_KEY_T && action == GLFW_PRESS)
 		timeOfDay = fmodf(timeOfDay + 0.125f, 1.0f);
@@ -462,6 +473,9 @@ void initUniforms()
 	fogColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fogColor");
 	ambientLightLoc = glGetUniformLocation(myCustomShader.shaderProgram, "ambientLight");
 	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
+	fireLightPosEyeLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireLightPosEye");
+	fireColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireColor");
+	fireIntensityLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireIntensity");
 	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
 	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
 	lightShader.useShaderProgram();
@@ -478,6 +492,25 @@ bool invisibilistyt = false;
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
 {
 	return a + (b - a) * glm::clamp(t, 0.0f, 1.0f);
+}
+
+// Uploads the campfire light. Needs the current view matrix and the house's model matrix,
+// because the fire is part of the house model.
+void updateFireLight(const glm::mat4& houseModel)
+{
+	float t = (float)glfwGetTime();
+	// Layered sines give an irregular flicker without needing a noise function.
+	float flicker = 1.0f + 0.12f * sinf(t * 11.0f) + 0.08f * sinf(t * 23.0f + 1.3f) + 0.05f * sinf(t * 47.0f + 0.7f);
+	glm::vec3 jitter = glm::vec3(0.03f * sinf(t * 7.0f), 0.05f * sinf(t * 13.0f + 2.0f), 0.03f * sinf(t * 5.0f + 1.0f));
+
+	// The fire burns all the time but only stands out once the sun is low.
+	float intensity = fireOn ? flicker * (0.35f + 2.65f * nightFactor) : 0.0f;
+	glm::vec3 posEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + jitter, 1.0f));
+	glm::vec3 color = glm::vec3(1.0f, 0.55f + 0.05f * sinf(t * 17.0f), 0.2f);
+
+	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(posEye));
+	glUniform3fv(fireColorLoc, 1, glm::value_ptr(color));
+	glUniform1f(fireIntensityLoc, intensity);
 }
 
 // Advances the clock and uploads sun/moon direction, light colors, fog and sky tint.
@@ -509,6 +542,7 @@ void updateDayNight()
 
 	// 1 at day, 0 at night, with a short twilight around the horizon.
 	float daylight = glm::smoothstep(-0.15f, 0.2f, elevation);
+	nightFactor = 1.0f - daylight;
 	float twilight = 1.0f - glm::smoothstep(0.0f, 0.3f, fabsf(elevation));
 	glm::vec3 ambient = lerp3(glm::vec3(0.04f, 0.05f, 0.1f), glm::vec3(0.2f), daylight);
 	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
@@ -699,6 +733,9 @@ void renderScene()
 
 	// lamp toggle (H/J); must be sent while this program is bound
 	glUniform1i(lightsOnLoc, lightsOn);
+
+	// same model matrix the house is drawn with below
+	updateFireLight(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0)));
 
 	glViewport(0, 0, retina_width, retina_height);
 	myCustomShader.useShaderProgram();
