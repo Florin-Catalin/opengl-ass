@@ -20,6 +20,7 @@
 #include "Camera.hpp"
 #include "SkyBox.hpp"
 #include "Planets.hpp"
+#include "Rain.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -76,6 +77,15 @@ glm::vec2 cloudOffset = glm::vec2(0.0f);
 glm::vec3 cloudLitColor = glm::vec3(1.0f);
 glm::vec3 cloudShadowColor = glm::vec3(0.6f);
 void setCloudUniforms(GLuint program);
+
+// Rain, toggled with R. rainAmount eases towards 0 or 1 so storms roll in and clear up gradually.
+bool raining = false;
+float rainAmount = 0.0f;
+const float RAIN_FADE_SECONDS = 4.0f;
+const int RAIN_MAX_DROPS = 12000;
+gps::Rain rain;
+gps::Shader rainShader;
+glm::vec3 rainColor = glm::vec3(0.6f);
 GLuint ambientLightLoc;
 GLuint pointLightColorLoc;
 GLuint fogColorLoc;
@@ -229,6 +239,9 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 
 	if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS)
 		cloudCoverage = glm::min(cloudCoverage + 0.15f, 1.0f);
+
+	if (key == GLFW_KEY_R && action == GLFW_PRESS)
+		raining = !raining;
 
 	if (key == GLFW_KEY_P && action == GLFW_PRESS)
 		dayCount += 10; // watch the planets move against the stars
@@ -542,6 +555,7 @@ void initModels()
 	farmer = gps::Model3D("objects/farmer/farmer.obj", "objects/farmer/");
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
+	rain.Init(RAIN_MAX_DROPS);
 
 	tankBounds = farmer.GetBounds();
 	houseBounds = house.GetMeshBounds();
@@ -556,6 +570,7 @@ void initShaders()
 	lightShader.loadShader("shaders/lightCube.vert", "shaders/lightCube.frag");
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
+	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
 }
 
 void initUniforms()
@@ -672,15 +687,38 @@ void updatePlanets(const glm::mat3& skyTurn, float daylight)
 		float twilightFade = glm::clamp((limitingMagnitude - m) / 1.5f, 0.0f, 1.0f);
 		float glareFade = glm::smoothstep(10.0f, 18.0f, fabsf(sightings[k].elongationDeg)); // lost in the sun's glare
 		float brightness = glm::clamp(0.55f + 0.22f * (0.5f - m), 0.3f, 1.7f); // magnitude -> display
-		planetBrightness[k] = brightness * twilightFade * glareFade;
+		planetBrightness[k] = brightness * twilightFade * glareFade * (1.0f - rainAmount);
 	}
+}
+
+// Rain streaks around the camera, drawn last because they are transparent.
+void drawRain()
+{
+	if (rainAmount <= 0.0f)
+		return;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::vec3 velocity = glm::vec3(WIND_VELOCITY.x * 1.5f, -16.0f, WIND_VELOCITY.y * 1.5f);
+
+	GLuint p = rainShader.shaderProgram;
+	rainShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(glGetUniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(glGetUniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(40.0f, 30.0f, 40.0f)));
+	glUniform1f(glGetUniformLocation(p, "streakLength"), 0.6f);
+	glUniform3fv(glGetUniformLocation(p, "rainColor"), 1, glm::value_ptr(rainColor));
+	glUniform1f(glGetUniformLocation(p, "rainAlpha"), 0.35f);
+	rain.Draw(rainShader, rainAmount);
 }
 
 // Cloud uniforms shared by every program that includes clouds.glsl.
 void setCloudUniforms(GLuint program)
 {
 	glUniform2fv(glGetUniformLocation(program, "cloudOffset"), 1, glm::value_ptr(cloudOffset));
-	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), cloudCoverage);
+	// Rain brings full overcast regardless of the chosen cover.
+	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), glm::mix(cloudCoverage, 1.0f, rainAmount));
 }
 
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
@@ -755,13 +793,24 @@ void updateDayNight()
 	glm::vec3 ambient = lerp3(nightAmbient, glm::vec3(0.2f), daylight);
 	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
 	skyColor = lerp3(skyColor, skyColor * glm::vec3(1.0f, 0.6f, 0.45f), twilight);
+
+	// Rain: the sun or moon is mostly blocked, its halo disappears and the sky turns grey.
+	float rainTarget = raining ? 1.0f : 0.0f;
+	float rainStep = frameDt / RAIN_FADE_SECONDS;
+	rainAmount += glm::clamp(rainTarget - rainAmount, -rainStep, rainStep);
+	directColor *= 1.0f - 0.65f * rainAmount;
+	moonGlow *= 1.0f - rainAmount;
+	float skyGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.6f;
+	skyColor = lerp3(skyColor, glm::vec3(skyGrey), rainAmount * 0.8f);
+	rainColor = glm::min(ambient * 1.5f + directColor * 0.4f + glm::vec3(0.1f), glm::vec3(1.0f));
+
 	glm::vec3 fogColor = skyColor * 0.5f;
 
 	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
 	// blue-grey under the moon, near-black silhouettes on a moonless night.
 	cloudOffset += WIND_VELOCITY * frameDt;
-	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f));
-	cloudShadowColor = ambient * 1.5f + skyColor * 0.1f;
+	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount);
+	cloudShadowColor = (ambient * 1.5f + skyColor * 0.1f) * (1.0f - 0.3f * rainAmount);
 
 	myCustomShader.useShaderProgram();
 	glUniform3fv(lightDirLoc, 1, glm::value_ptr(currentLightDir));
@@ -1104,7 +1153,7 @@ void renderScene()
 
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor) * (1.0f - rainAmount));
 	glUniformMatrix3fv(glGetUniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
@@ -1121,6 +1170,7 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
+	drawRain();
 
 }
 
