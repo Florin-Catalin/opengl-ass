@@ -46,7 +46,7 @@ float cloudFbm(vec2 p)
 float cloudDensityAt(vec2 xz)
 {
 	float n = cloudFbm((xz + cloudOffset) * CLOUD_SCALE);
-	float threshold = mix(0.72, 0.28, cloudCoverage);
+	float threshold = mix(0.72, 0.05, cloudCoverage); // 1 = solid overcast
 	return smoothstep(threshold, threshold + 0.22, n);
 }
 

@@ -70,7 +70,7 @@ glm::vec3 skyColor = glm::vec3(1.0f);
 float moonGlow = 0.0f; // 0..1, how strongly the moon lights the scene and glows in the sky
 
 // Clouds: one noise sheet shared by the sky, moon and scene shaders (shaders/clouds.glsl).
-float cloudCoverage = 0.45f;                 // 0 = clear, 1 = overcast; [ and ] change it
+float cloudCoverage = 0.3f;                  // 0 = clear, 1 = overcast; [ and ] change it
 const glm::vec2 WIND_VELOCITY(3.0f, 1.2f);   // world units per second
 glm::vec2 cloudOffset = glm::vec2(0.0f);
 glm::vec3 cloudLitColor = glm::vec3(1.0f);
