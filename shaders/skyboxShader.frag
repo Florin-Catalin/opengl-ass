@@ -37,6 +37,9 @@ uniform vec4 meteorState[MAX_METEORS];   // x = head angle travelled, y = tail l
 // so it reads well on screen.
 uniform vec3 sunDirWorld;
 uniform float rainbowStrength; // 0 = none; set from the time since the rain stopped and the sun height
+uniform float sandAmount;      // 0..1 sandstorm: dust hides the sky, thickest at the horizon
+uniform vec3 dustColor;        // matches the scene fog colour, so the ground fades into the sky
+uniform vec2 dustOffset;       // how far the dust billows have blown
 const float RAINBOW_RADIUS = 48.0; // degrees from the antisolar point to the red outer edge
 const float RAINBOW_WIDTH = 4.5;   // degrees from violet to red
 
@@ -203,4 +206,21 @@ void main()
 	// The rainbow forms in the falling drops between you and the clouds, so it sits in front of them.
 	if (rainbowStrength > 0.0)
 		color.rgb = max(color.rgb + rainbow(dir) * rainbowStrength * horizonFade, vec3(0.0));
+
+	// Sandstorm: billowing dust in front of everything. Solid at the horizon (where it meets the
+	// dust fog over the ground), a little thinner and lumpier overhead. The sun is a pale disc.
+	if (sandAmount > 0.0) {
+		vec2 q = dir.xz / (max(dir.y, 0.0) + 0.3) * 2.5 + dustOffset * 0.04;
+		float billow = cloudFbm(q);
+		float up = smoothstep(0.05, 0.8, dir.y);
+		float dust = sandAmount * mix(1.0, 0.8 + 0.25 * billow, up);
+		vec3 dustSky = dustColor * mix(1.0, 0.65 + 0.7 * billow, up);
+		color.rgb = mix(color.rgb, dustSky, clamp(dust, 0.0, 1.0));
+
+		float s = dot(dir, sunDirWorld);
+		float sunUp = smoothstep(-0.05, 0.08, sunDirWorld.y);
+		float disc = smoothstep(cos(0.05), cos(0.04), s);
+		float glow = pow(max(s, 0.0), 24.0);
+		color.rgb += (vec3(1.0, 0.92, 0.75) * disc * 0.45 + dustColor * glow * 0.5) * sandAmount * sunUp;
+	}
 }

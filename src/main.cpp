@@ -123,7 +123,17 @@ const int SNOW_MAX_FLAKES = 7000;
 gps::Snow snow;
 gps::Shader snowShader;
 glm::vec3 snowColor = glm::vec3(0.9f);
-// The larger of rainAmount and snowAmount: how much the weather closes in (clouds, hidden stars).
+// Sandstorm, toggled with U (it replaces rain or snow, and R or V replace it). Dust hides the sky
+// and the far scene, light turns orange and dim, and sand streaks past with a strong wind.
+bool sandstorm = false;
+float sandAmount = 0.0f;
+const float SAND_FADE_SECONDS = 8.0f; // storms roll in and settle more slowly than rain
+const int SAND_MAX_GRAINS = 9000;
+gps::Rain sand;                       // the rain streak renderer, blown sideways
+glm::vec3 dustColor = glm::vec3(0.7f, 0.5f, 0.3f);
+glm::vec2 dustOffset = glm::vec2(0.0f); // how far the dust billows have blown
+
+// The largest of rainAmount, snowAmount and sandAmount: how much the weather closes in.
 float overcast = 0.0f;
 
 // Puddles: fill up while it rains (about 15 s) and dry slowly afterwards (about 90 s).
@@ -313,15 +323,26 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 		raining = !raining;
 		if (!raining)
 			rainStoppedTime = glfwGetTime();
-		else
+		else {
 			snowing = false;
+			sandstorm = false;
+		}
 	}
 
 	if (key == GLFW_KEY_V && action == GLFW_PRESS)
 	{
 		snowing = !snowing;
-		if (snowing)
+		if (snowing) {
 			raining = false; // no rainbow: it changed to snow, it didn't clear up
+			sandstorm = false;
+		}
+	}
+
+	if (key == GLFW_KEY_U && action == GLFW_PRESS)
+	{
+		sandstorm = !sandstorm;
+		if (sandstorm)
+			raining = snowing = false;
 	}
 
 	if (key == GLFW_KEY_P && action == GLFW_PRESS)
@@ -637,6 +658,7 @@ void initModels()
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	rain.Init(RAIN_MAX_DROPS);
 	snow.Init(SNOW_MAX_FLAKES);
+	sand.Init(SAND_MAX_GRAINS);
 	lightning.Init();
 	// The camp floor is around y = 0; the house, tents and wood pile lie within this box.
 	fireflies.Init(FIREFLY_COUNT, glm::vec3(-14.0f, 0.3f, -14.0f), glm::vec3(14.0f, 2.2f, 10.0f));
@@ -715,7 +737,7 @@ bool invisibilistyt = false;
 // Drawn after the skybox with alpha blending, faded by nightFactor.
 void drawMoon()
 {
-	float alpha = glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f);
+	float alpha = glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f) * (1.0f - sandAmount); // lost in the dust
 	if (alpha < 0.01f)
 		return;
 
@@ -920,6 +942,29 @@ void drawSnow()
 	snow.Draw(snowShader, snowAmount);
 }
 
+// Sand grains blown almost horizontally past the camera (rain streaks with a sideways velocity).
+void drawSand()
+{
+	if (sandAmount <= 0.0f)
+		return;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::vec3 velocity = glm::vec3(WIND_VELOCITY.x * 7.0f, -1.5f, WIND_VELOCITY.y * 7.0f);
+
+	GLuint p = rainShader.shaderProgram;
+	rainShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(glGetUniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(glGetUniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(30.0f, 14.0f, 30.0f)));
+	glUniform1f(glGetUniformLocation(p, "streakLength"), 0.35f);
+	glm::vec3 grainColor = dustColor * 0.6f; // grains are darker than the glowing dust around them
+	glUniform3fv(glGetUniformLocation(p, "rainColor"), 1, glm::value_ptr(grainColor));
+	glUniform1f(glGetUniformLocation(p, "rainAlpha"), 0.5f);
+	sand.Draw(rainShader, sandAmount);
+}
+
 // Fireflies come out after dusk and hide when it rains.
 void drawFireflies()
 {
@@ -1008,6 +1053,8 @@ void updateFireLight(const glm::mat4& houseModel)
 	float dousing = rainAmount * 4.0f * fireStrength * (1.0f - fireStrength); // 0..1, peaks at 0.5
 	float sputter = 0.5f + 0.5f * sinf(t * 13.0f + 3.0f * sinf(t * 1.7f));
 	flicker *= 1.0f - 0.7f * dousing * sputter;
+	// Gusts in a sandstorm whip the flames about.
+	flicker *= 1.0f + sandAmount * (0.25f * sinf(t * 9.0f + 2.0f * sinf(t * 2.3f)) - 0.1f);
 
 	// The fire burns all the time but only stands out once the sun is low.
 	float intensity = fireOn ? flicker * fireStrength * (0.35f + 2.65f * nightFactor) : 0.0f;
@@ -1081,13 +1128,27 @@ void updateDayNight()
 	// Snow: a softer, brighter overcast than rain. Falling snow lights up a bit (it scatters light).
 	float snowTarget = snowing ? 1.0f : 0.0f;
 	snowAmount += glm::clamp(snowTarget - snowAmount, -rainStep, rainStep);
-	overcast = glm::max(rainAmount, snowAmount);
+	float sandTarget = sandstorm ? 1.0f : 0.0f;
+	float sandStep = frameDt / SAND_FADE_SECONDS;
+	sandAmount += glm::clamp(sandTarget - sandAmount, -sandStep, sandStep);
+	overcast = glm::max(glm::max(rainAmount, snowAmount), sandAmount);
 	directColor *= 1.0f - 0.5f * snowAmount;
 	moonGlow *= 1.0f - snowAmount;
 	float snowGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.85f;
 	skyColor = lerp3(skyColor, glm::vec3(snowGrey) * glm::vec3(0.95f, 0.97f, 1.0f), snowAmount * 0.8f);
 	ambient += glm::vec3(0.04f, 0.045f, 0.05f) * snowAmount * daylight;
 	snowColor = glm::min(ambient * 2.5f + directColor * 0.8f + glm::vec3(0.12f), glm::vec3(1.0f));
+
+	// Sandstorm: the dust takes the colour of the light passing through it (ochre by day, rust
+	// at sunset, dark brown at night). Sunlight is dimmed and reddened, the rest turns to haze.
+	glm::vec3 dustLight = ambient * 2.2f + directColor * 0.75f;
+	dustColor = glm::min(dustLight * glm::vec3(0.78f, 0.5f, 0.27f) + glm::vec3(0.03f, 0.02f, 0.01f), glm::vec3(0.85f, 0.6f, 0.35f));
+	directColor = lerp3(directColor, directColor * glm::vec3(0.4f, 0.27f, 0.15f), sandAmount);
+	ambient = lerp3(ambient, glm::max(ambient, dustColor * 0.45f), sandAmount);
+	moonGlow *= 1.0f - sandAmount;
+	skyColor = lerp3(skyColor, dustColor, sandAmount * 0.6f);
+	dustOffset += WIND_VELOCITY * frameDt * (2.0f + 4.0f * sandAmount);
+	puddleWetness -= frameDt * sandAmount / 20.0f; // the hot wind dries them
 
 	if (snowAmount > 0.2f)
 		snowCover += frameDt * snowAmount / SNOW_COVER_SECONDS;
@@ -1125,11 +1186,11 @@ void updateDayNight()
 	skyColor += glm::vec3(0.6f, 0.65f, 0.85f) * flash;
 	rainColor = glm::min(rainColor + glm::vec3(0.5f) * flash, glm::vec3(1.0f));
 
-	glm::vec3 fogColor = skyColor * 0.5f;
+	glm::vec3 fogColor = lerp3(skyColor * 0.5f, dustColor, sandAmount);
 
 	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
 	// blue-grey under the moon, near-black silhouettes on a moonless night.
-	cloudOffset += WIND_VELOCITY * frameDt;
+	cloudOffset += WIND_VELOCITY * frameDt * (1.0f + 5.0f * sandAmount); // a storm wind
 	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount - 0.15f * snowAmount);
 	cloudShadowColor = (ambient * 1.5f + skyColor * 0.1f) * (1.0f - 0.3f * rainAmount);
 	cloudLitColor += glm::vec3(0.5f, 0.55f, 0.75f) * flash; // clouds light up from inside
@@ -1143,6 +1204,8 @@ void updateDayNight()
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowAmount"), snowAmount);
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowCover"), snowCover);
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "sandAmount"), sandAmount);
+	glUniform2fv(glGetUniformLocation(myCustomShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
 
 	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
 }
@@ -1537,6 +1600,9 @@ void renderScene()
 	// Meteors are a night sight; by day only a faint trace shows (bright fireballs can be seen in daylight).
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "rainbowStrength"), rainbowStrength);
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "sandAmount"), sandAmount);
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustColor"), 1, glm::value_ptr(dustColor));
+	glUniform2fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
 	updateMeteors(skyboxShader.shaderProgram, glm::mix(0.3f, 1.0f, glm::smoothstep(0.3f, 0.9f, nightFactor)));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
@@ -1553,6 +1619,7 @@ void renderScene()
 	drawFireflies();
 	drawRain();
 	drawSnow();
+	drawSand();
 
 }
 

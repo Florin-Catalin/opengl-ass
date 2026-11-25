@@ -36,6 +36,8 @@ uniform float fireIntensity;
 uniform float rainAmount; // 0..1: wet surfaces (darker, shinier) and thicker haze
 uniform float snowAmount; // 0..1: falling snow, a light white haze
 uniform float snowCover;  // 0..1: snow lying on upward-facing surfaces, from patches to a full blanket
+uniform float sandAmount; // 0..1: sandstorm, thick billowing dust (the fog colour is the dust colour)
+uniform vec2 dustOffset;  // how far the dust billows have blown
 
 // Puddles: on the terrain only, filled by rain and drying slowly. They mirror the sky (skybox,
 // clouds, moon) and show raindrop ripples while it rains.
@@ -245,6 +247,12 @@ vec3 applyPuddles(vec3 color)
 float computeFog()
 {
  float fogDensity = 0.010f + 0.025f * rainAmount + 0.02f * snowAmount;
+ if (sandAmount > 0.0f) {
+	// Billows of dust blowing through: denser and thinner bands, sampled halfway to the camera.
+	vec3 mid = mix(cameraPosWorld, fragPos.xyz, 0.5f);
+	float billow = cloudFbm((mid.xz + dustOffset) * 0.07f + vec2(mid.y * 0.05f, 0.0f));
+	fogDensity += sandAmount * 0.075f * (0.15f + 1.7f * billow * billow * 2.0f);
+ }
  float fragmentDistance = length(fragPosEye);
  float fogFactor = exp(-pow(fragmentDistance * fogDensity, 2));
 
@@ -294,7 +302,7 @@ void main()
     vec3 colorFinal = applyPuddles(min(color, 1.0f));
 
 	// Fog when switched on (F), and rain haze while it rains.
-	float fogAmount = max(startFog.x, max(0.85f * rainAmount, 0.7f * snowAmount));
+	float fogAmount = max(max(startFog.x, sandAmount), max(0.85f * rainAmount, 0.7f * snowAmount));
 	if (fogAmount > 0.0f) {
 		float fogFactor = computeFog();
 		fColor = vec4(mix(colorFinal, fogColor, (1.0f - fogFactor) * fogAmount), 1.0f);
