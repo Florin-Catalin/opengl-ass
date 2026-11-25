@@ -27,6 +27,6 @@ Rendering is two-pass shadow mapping. The depth pass uses `simpleDepthMap` and w
 
 Vertex attribute locations are fixed (0 position, 1 normal, 2 texcoords) in `Mesh.cpp`/`SkyBox.cpp`, and each vertex shader declares matching `layout(location=N)`. All shaders start with `#version 410 core`.
 
-The skybox is drawn last, because `SkyBox::Draw` binds its own program.
+`updateDayNight()` runs every frame. It advances `timeOfDay` (60 s per day) and computes `currentLightDir`, which is the sun, or the moon at night. That direction drives the shading, the shadow matrix and the light cube. It also uploads the light color, ambient light, fog color and skybox tint. Don't set `lightDir`/`lightColor` uniforms elsewhere; they are overwritten each frame. The skybox is drawn last, because `SkyBox::Draw` binds its own program.
 
-Input uses a `pressedKeys[1024]` array set by the GLFW key callback and read each frame in `processMovement`. Keys: WASD plus mouse move the camera; Q/E rotate the scene; K/L rotate the light; F/G fog on/off; H/J lights on/off; X toggles wireframe; arrow keys move the goat; C launches the "rocket"; Esc quits. Note that X toggles on every frame while held.
+Input uses a `pressedKeys[1024]` array set by the GLFW key callback and read each frame in `processMovement`. Keys: WASD plus mouse move the camera; Q/E rotate the scene; K/L rotate the sun/moon arc; N pauses the day/night cycle; T skips ahead; F/G fog on/off; H/J lights on/off; X toggles wireframe; arrow keys move the goat; C launches the "rocket"; Esc quits. Note that X toggles on every frame while held.

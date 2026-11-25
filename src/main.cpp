@@ -15,6 +15,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <string>
+#include <cmath>
 #include "Shader.hpp"
 #include "Camera.hpp"
 #include "SkyBox.hpp"
@@ -57,6 +58,17 @@ glm::vec3 viewPos;
 GLuint viewPosLoc;
 GLuint fogDensityLoc;
 GLuint lightsOnLoc;
+
+// Day/night cycle. timeOfDay runs 0..1: 0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight.
+bool dayNightRunning = true;
+float timeOfDay = 0.05f;
+const float DAY_LENGTH_SECONDS = 60.0f;
+double lastFrameTime = 0.0;
+glm::vec3 currentLightDir = glm::vec3(0.0f, 1.0f, 2.0f); // direction towards the sun or moon
+glm::vec3 skyColor = glm::vec3(1.0f);
+GLuint ambientLightLoc;
+GLuint pointLightColorLoc;
+GLuint fogColorLoc;
 
 gps::Camera myCamera(glm::vec3(0.0f, 0.125f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 GLfloat cameraSpeed = 0.05f;
@@ -153,6 +165,12 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
 
+	if (key == GLFW_KEY_N && action == GLFW_PRESS)
+		dayNightRunning = !dayNightRunning;
+
+	if (key == GLFW_KEY_T && action == GLFW_PRESS)
+		timeOfDay = fmodf(timeOfDay + 0.125f, 1.0f);
+
 	if (key >= 0 && key < 1024)
 	{
 		if (action == GLFW_PRESS)
@@ -239,18 +257,12 @@ void processMovement()
 		lightAngle += 0.3f;
 		if (lightAngle > 360.0f)
 			lightAngle -= 360.0f;
-		glm::vec3 lightDirTr = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(lightDir, 1.0f));
-		myCustomShader.useShaderProgram();
-		glUniform3fv(lightDirLoc, 1, glm::value_ptr(lightDirTr));
 	}
 
 	if (pressedKeys[GLFW_KEY_L]) {
 		lightAngle -= 0.3f;
 		if (lightAngle < 0.0f)
 			lightAngle += 360.0f;
-		glm::vec3 lightDirTr = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(lightDir, 1.0f));
-		myCustomShader.useShaderProgram();
-		glUniform3fv(lightDirLoc, 1, glm::value_ptr(lightDirTr));
 	}
 
 	//wireframe test
@@ -387,8 +399,7 @@ glm::mat4 computeLightSpaceTrMatrix()
 	const GLfloat near_plane = 1.0f, far_plane = 10.0f;
 	glm::mat4 lightProjection = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, near_plane, far_plane);
 
-	glm::vec3 lightDirTr = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(lightDir, 1.0f));
-	glm::mat4 lightView = glm::lookAt(lightDirTr, myCamera.getCameraTarget(), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 lightView = glm::lookAt(currentLightDir, myCamera.getCameraTarget(), glm::vec3(0.0f, 1.0f, 0.0f));
 
 	return lightProjection * lightView;
 }
@@ -448,7 +459,11 @@ void initUniforms()
 	glUniform3fv(posLightPosLoc, 1, glm::value_ptr(posLightPos));
 
 	fogLoc = glGetUniformLocation(myCustomShader.shaderProgram, "startFog");
+	fogColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fogColor");
+	ambientLightLoc = glGetUniformLocation(myCustomShader.shaderProgram, "ambientLight");
 	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
+	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
+	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
 	lightShader.useShaderProgram();
 	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -460,11 +475,61 @@ void initUniforms()
 
 bool invisibilistyt = false;
 
+static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
+{
+	return a + (b - a) * glm::clamp(t, 0.0f, 1.0f);
+}
+
+// Advances the clock and uploads sun/moon direction, light colors, fog and sky tint.
+void updateDayNight()
+{
+	double now = glfwGetTime();
+	float dt = (float)(now - lastFrameTime);
+	lastFrameTime = now;
+	if (dayNightRunning)
+		timeOfDay = fmodf(timeOfDay + dt / DAY_LENGTH_SECONDS, 1.0f);
+
+	// The sun moves on a circle in the XY plane (offset in Z so lookAt never sees a vertical
+	// direction); the moon is opposite. K/L still rotate the whole arc around Y.
+	float theta = timeOfDay * 2.0f * glm::pi<float>();
+	float elevation = sinf(theta); // -1..1, > 0 means the sun is up
+	glm::vec3 sunDir = glm::vec3(2.0f * cosf(theta), 2.0f * elevation, 1.0f);
+	glm::vec3 moonDir = glm::vec3(-sunDir.x, -sunDir.y, sunDir.z);
+	glm::vec3 dir = elevation >= 0.0f ? sunDir : moonDir;
+	currentLightDir = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(dir, 1.0f));
+
+	const glm::vec3 sunsetColor(1.0f, 0.55f, 0.3f);
+	const glm::vec3 noonColor(1.0f, 0.97f, 0.9f);
+	const glm::vec3 moonColor(0.25f, 0.3f, 0.5f);
+	glm::vec3 directColor;
+	if (elevation >= 0.0f)
+		directColor = lerp3(sunsetColor, noonColor, elevation / 0.4f) * glm::smoothstep(0.0f, 0.15f, elevation);
+	else
+		directColor = moonColor * glm::smoothstep(0.0f, 0.15f, -elevation);
+
+	// 1 at day, 0 at night, with a short twilight around the horizon.
+	float daylight = glm::smoothstep(-0.15f, 0.2f, elevation);
+	float twilight = 1.0f - glm::smoothstep(0.0f, 0.3f, fabsf(elevation));
+	glm::vec3 ambient = lerp3(glm::vec3(0.04f, 0.05f, 0.1f), glm::vec3(0.2f), daylight);
+	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
+	skyColor = lerp3(skyColor, skyColor * glm::vec3(1.0f, 0.6f, 0.45f), twilight);
+	glm::vec3 fogColor = skyColor * 0.5f;
+
+	myCustomShader.useShaderProgram();
+	glUniform3fv(lightDirLoc, 1, glm::value_ptr(currentLightDir));
+	glUniform3fv(lightColorLoc, 1, glm::value_ptr(directColor));
+	glUniform3fv(ambientLightLoc, 1, glm::value_ptr(ambient));
+	glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogColor));
+
+	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
+}
+
 void renderScene()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	processMovement();
+	updateDayNight();
 
 	//render the scene to the depth buffer (first pass)
 
@@ -778,12 +843,13 @@ void renderScene()
 
 	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(lightAngle), glm::vec3(0.0f, 1.0f, 0.0f));
-	model = glm::translate(model, lightDir);
+	model = glm::translate(glm::mat4(1.0f), currentLightDir);
 	model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
 	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	lightCube.Draw(lightShader);
 
+	skyboxShader.useShaderProgram();
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
 
 }

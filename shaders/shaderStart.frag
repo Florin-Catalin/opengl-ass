@@ -20,9 +20,14 @@ uniform sampler2D specularTexture;
 uniform sampler2D shadowMap;
 uniform int lightsOn;
 
+//day/night cycle: ambient light and point-light (lamp) color are set per frame
+uniform vec3 ambientLight;
+uniform vec3 pointLightColor;
+
 
 //fog
 uniform	vec3 startFog;
+uniform vec3 fogColor;
 
 
 vec3 o;
@@ -33,7 +38,6 @@ float pointQuadratic = 3.0f;
 float pointSpecularStrenght = 10.0f;
 
 vec3 ambient;
-float ambientStrength = 0.2f;
 vec3 diffuse;
 vec3 specular;
 float specularStrength = 0.5f;
@@ -59,7 +63,7 @@ void computeLightComponents()
 	vec3 halfVector = normalize(lightDirN + viewDirN);
 		
 	//compute ambient light
-	ambient = ambientStrength * lightColor;
+	ambient = ambientLight;
 	
 	//compute diffuse light
 	diffuse = max(dot(normalEye, lightDirN), 0.0f) * lightColor;
@@ -107,9 +111,9 @@ void computePointLight()
   			     pointQuadratic * (distance * distance));    
 
     // combine results
-    ambient  += lightColor * vec3(texture(diffuseTexture, fragTexCoords)) * attenuation;
-    diffuse  += lightColor * diff * vec3(texture(diffuseTexture, fragTexCoords)) * attenuation;
-    specular += lightColor * spec * pointSpecularStrenght * attenuation;
+    ambient  += pointLightColor * vec3(texture(diffuseTexture, fragTexCoords)) * attenuation;
+    diffuse  += pointLightColor * diff * vec3(texture(diffuseTexture, fragTexCoords)) * attenuation;
+    specular += pointLightColor * spec * pointSpecularStrenght * attenuation;
 }
 
 float computeFog()
@@ -145,9 +149,7 @@ void main()
 
 	if (startFog.x==1.0f){
 		float fogFactor = computeFog();
-		vec4 fogColor = vec4(0.5f, 0.5f, 0.5f, 1.0f);
-
-		fColor = fogColor*(1.0f-fogFactor)+vec4(colorFinal, 1.0f)*fogFactor;
+		fColor = vec4(fogColor, 1.0f)*(1.0f-fogFactor)+vec4(colorFinal, 1.0f)*fogFactor;
 	}else{
 		fColor = vec4(colorFinal, 1.0f);
 	}
