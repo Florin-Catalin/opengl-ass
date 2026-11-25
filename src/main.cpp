@@ -22,6 +22,7 @@
 #include "Planets.hpp"
 #include "Rain.hpp"
 #include "Lightning.hpp"
+#include "Fireflies.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -103,6 +104,11 @@ const int RAIN_MAX_DROPS = 12000;
 gps::Rain rain;
 gps::Shader rainShader;
 glm::vec3 rainColor = glm::vec3(0.6f);
+
+// Fireflies around the camp at night (not in the rain).
+gps::Fireflies fireflies;
+gps::Shader firefliesShader;
+const int FIREFLY_COUNT = 160;
 
 // Lightning: random strikes every 4-12 s while it rains hard; Z strikes immediately.
 gps::Lightning lightning;
@@ -595,6 +601,8 @@ void initModels()
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	rain.Init(RAIN_MAX_DROPS);
 	lightning.Init();
+	// The camp floor is around y = 0; the house, tents and wood pile lie within this box.
+	fireflies.Init(FIREFLY_COUNT, glm::vec3(-14.0f, 0.3f, -14.0f), glm::vec3(14.0f, 2.2f, 10.0f));
 
 	tankBounds = farmer.GetBounds();
 	houseBounds = house.GetMeshBounds();
@@ -610,6 +618,7 @@ void initShaders()
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
 	lightningShader.loadShader("shaders/lightning.vert", "shaders/lightning.frag");
+	firefliesShader.loadShader("shaders/fireflies.vert", "shaders/fireflies.frag");
 }
 
 void initUniforms()
@@ -794,6 +803,23 @@ void updateMeteors(GLuint program, float visibility)
 		glUniform3fv(glGetUniformLocation(program, "meteorTangent"), n, glm::value_ptr(tangents[0]));
 		glUniform4fv(glGetUniformLocation(program, "meteorState"), n, glm::value_ptr(states[0]));
 	}
+}
+
+// Fireflies come out after dusk and hide when it rains.
+void drawFireflies()
+{
+	float visibility = glm::smoothstep(0.5f, 0.9f, nightFactor) * (1.0f - rainAmount);
+	if (visibility <= 0.01f)
+		return;
+	GLuint p = firefliesShader.shaderProgram;
+	firefliesShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "areaMin"), 1, glm::value_ptr(fireflies.AreaMin()));
+	glUniform3fv(glGetUniformLocation(p, "areaSize"), 1, glm::value_ptr(fireflies.AreaSize()));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	fireflies.Draw(firefliesShader, visibility);
 }
 
 // A bolt somewhere ahead of the camera (uses the previous frame's view, which is fine).
@@ -1318,6 +1344,7 @@ void renderScene()
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
+	drawFireflies();
 	drawRain();
 
 }
