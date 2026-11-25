@@ -156,7 +156,6 @@ GLfloat lampAmbient = 0;
 
 
 
-gps::Model3D lightCube;
 gps::Model3D tents;
 gps::Model3D grass;
 
@@ -169,7 +168,6 @@ gps::Model3D tank;
 gps::Model3D farmer;
 gps::Model3D wood;
 gps::Shader myCustomShader;
-gps::Shader lightShader;
 gps::Shader depthMapShader;
 
 float angleTank = 0.0f;
@@ -229,10 +227,6 @@ void windowResizeCallback(GLFWwindow* window, int width, int height)
 	//send matrix data to shader
 	GLint projLoc = glGetUniformLocation(myCustomShader.shaderProgram, "projection");
 	glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
-	lightShader.useShaderProgram();
-
-	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
 	//set Viewport transform
 	glViewport(0, 0, retina_width, retina_height);
@@ -572,7 +566,6 @@ glm::mat4 computeLightSpaceTrMatrix()
 void initModels()
 {
 	
-	lightCube = gps::Model3D("objects/cube/cube.obj", "objects/cube/");
 	tents = gps::Model3D("objects/tents/tents.obj", "objects/tents/");
 	grass = gps::Model3D("objects/grass/GRASS.obj", "objects/grass/");
 	
@@ -597,7 +590,6 @@ void initModels()
 void initShaders()
 {
 	myCustomShader.loadShader("shaders/shaderStart.vert", "shaders/shaderStart.frag");
-	lightShader.loadShader("shaders/lightCube.vert", "shaders/lightCube.frag");
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
@@ -644,8 +636,6 @@ void initUniforms()
 	fireIntensityLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireIntensity");
 	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
 	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
-	lightShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
 
 
@@ -1267,17 +1257,6 @@ void renderScene()
 	//send normal matrix data to shader
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	wood.Draw(myCustomShader);
-
-	//draw a white cube around the light
-
-	lightShader.useShaderProgram();
-
-	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-
-	model = glm::translate(glm::mat4(1.0f), currentLightDir);
-	model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
-	glUniformMatrix4fv(glGetUniformLocation(lightShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
-	lightCube.Draw(lightShader);
 
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
