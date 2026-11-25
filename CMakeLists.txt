@@ -22,6 +22,7 @@ add_executable(opengl_scene
   src/Fireflies.cpp
   src/Snow.cpp
   src/Tornado.cpp
+  src/Embers.cpp
   src/Shader.cpp
   src/SkyBox.cpp
   src/stb_image.c)
