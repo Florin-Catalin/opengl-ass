@@ -34,6 +34,8 @@ uniform float fireIntensity;
 #include "clouds.glsl"
 
 uniform float rainAmount; // 0..1: wet surfaces (darker, shinier) and thicker haze
+uniform float snowAmount; // 0..1: falling snow, a light white haze
+uniform float snowCover;  // 0..1: snow lying on upward-facing surfaces, from patches to a full blanket
 
 // Puddles: on the terrain only, filled by rain and drying slowly. They mirror the sky (skybox,
 // clouds, moon) and show raindrop ripples while it rains.
@@ -214,7 +216,7 @@ vec3 applyPuddles(vec3 color)
 	float n = cloudFbm(posModel.xz * 0.18f + vec2(37.0f, 11.0f));
 	float threshold = mix(0.78f, 0.58f, puddleWetness);             // wetter -> bigger puddles
 	float onFloor = 1.0f - smoothstep(0.08f, 0.2f, abs(fragPos.y - puddlePlaneY)); // the mirror only matches there
-	float puddle = smoothstep(threshold, threshold + 0.04f, n) * flatness * onFloor;
+	float puddle = smoothstep(threshold, threshold + 0.04f, n) * flatness * onFloor * (1.0f - snowCover);
 	float damp = smoothstep(threshold - 0.08f, threshold, n) * flatness;
 	color *= 1.0f - 0.35f * damp * puddleWetness;                    // dark wet ground around them
 	if (puddle <= 0.0f)
@@ -242,7 +244,7 @@ vec3 applyPuddles(vec3 color)
 
 float computeFog()
 {
- float fogDensity = 0.010f + 0.025f * rainAmount;
+ float fogDensity = 0.010f + 0.025f * rainAmount + 0.02f * snowAmount;
  float fragmentDistance = length(fragPosEye);
  float fogFactor = exp(-pow(fragmentDistance * fogDensity, 2));
 
@@ -270,6 +272,16 @@ void main()
 	vec3 specMap = vec3(texture(specularTexture, fragTexCoords));
 	specMap = max(specMap, vec3(0.35f * rainAmount));
 
+	// Lying snow: on surfaces facing up, starting as patches and growing into a blanket.
+	if (snowCover > 0.0f) {
+		float up = normalize(normalWorld).y;
+		float patches = cloudFbm(posModel.xz * 0.5f + posModel.y * 0.3f + vec2(5.0f, 23.0f));
+		float edge = 1.05f - 1.25f * snowCover;
+		float snow = smoothstep(0.35f, 0.7f, up) * smoothstep(edge, edge + 0.08f, patches);
+		albedo = mix(albedo, vec3(0.9f, 0.93f, 0.97f), snow);
+		specMap = mix(specMap, vec3(0.12f), snow);
+	}
+
 	//modulate with diffuse map
 	ambient *= albedo;
 	diffuse *= albedo;
@@ -282,7 +294,7 @@ void main()
     vec3 colorFinal = applyPuddles(min(color, 1.0f));
 
 	// Fog when switched on (F), and rain haze while it rains.
-	float fogAmount = max(startFog.x, 0.85f * rainAmount);
+	float fogAmount = max(startFog.x, max(0.85f * rainAmount, 0.7f * snowAmount));
 	if (fogAmount > 0.0f) {
 		float fogFactor = computeFog();
 		fColor = vec4(mix(colorFinal, fogColor, (1.0f - fogFactor) * fogAmount), 1.0f);

@@ -23,6 +23,7 @@
 #include "Rain.hpp"
 #include "Lightning.hpp"
 #include "Fireflies.hpp"
+#include "Snow.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -109,6 +110,21 @@ glm::vec3 rainColor = glm::vec3(0.6f);
 gps::Fireflies fireflies;
 gps::Shader firefliesShader;
 const int FIREFLY_COUNT = 160;
+
+// Snow, toggled with V (it replaces the rain, and R replaces it). snowAmount eases like rainAmount.
+// snowCover is how much snow lies on upward-facing surfaces: it builds up while it snows and
+// melts afterwards, faster in sunshine and much faster in the rain.
+bool snowing = false;
+float snowAmount = 0.0f;
+float snowCover = 0.0f;
+const float SNOW_COVER_SECONDS = 40.0f; // to go from bare ground to fully white
+const float SNOW_MELT_SECONDS = 150.0f; // at night; the sun melts it 3x faster, rain within ~20 s
+const int SNOW_MAX_FLAKES = 7000;
+gps::Snow snow;
+gps::Shader snowShader;
+glm::vec3 snowColor = glm::vec3(0.9f);
+// The larger of rainAmount and snowAmount: how much the weather closes in (clouds, hidden stars).
+float overcast = 0.0f;
 
 // Puddles: fill up while it rains (about 15 s) and dry slowly afterwards (about 90 s).
 float puddleWetness = 0.0f;
@@ -297,6 +313,15 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 		raining = !raining;
 		if (!raining)
 			rainStoppedTime = glfwGetTime();
+		else
+			snowing = false;
+	}
+
+	if (key == GLFW_KEY_V && action == GLFW_PRESS)
+	{
+		snowing = !snowing;
+		if (snowing)
+			raining = false; // no rainbow: it changed to snow, it didn't clear up
 	}
 
 	if (key == GLFW_KEY_P && action == GLFW_PRESS)
@@ -611,6 +636,7 @@ void initModels()
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	rain.Init(RAIN_MAX_DROPS);
+	snow.Init(SNOW_MAX_FLAKES);
 	lightning.Init();
 	// The camp floor is around y = 0; the house, tents and wood pile lie within this box.
 	fireflies.Init(FIREFLY_COUNT, glm::vec3(-14.0f, 0.3f, -14.0f), glm::vec3(14.0f, 2.2f, 10.0f));
@@ -628,6 +654,7 @@ void initShaders()
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
+	snowShader.loadShader("shaders/snow.vert", "shaders/snow.frag");
 	lightningShader.loadShader("shaders/lightning.vert", "shaders/lightning.frag");
 	firefliesShader.loadShader("shaders/fireflies.vert", "shaders/fireflies.frag");
 }
@@ -747,7 +774,7 @@ void updatePlanets(const glm::mat3& skyTurn, float daylight)
 		float twilightFade = glm::clamp((limitingMagnitude - m) / 1.5f, 0.0f, 1.0f);
 		float glareFade = glm::smoothstep(10.0f, 18.0f, fabsf(sightings[k].elongationDeg)); // lost in the sun's glare
 		float brightness = glm::clamp(0.55f + 0.22f * (0.5f - m), 0.3f, 1.7f); // magnitude -> display
-		planetBrightness[k] = brightness * twilightFade * glareFade * (1.0f - rainAmount);
+		planetBrightness[k] = brightness * twilightFade * glareFade * (1.0f - overcast);
 	}
 }
 
@@ -872,10 +899,31 @@ void uploadPuddleUniforms()
 	glUniform1f(glGetUniformLocation(p, "hasReflection"), puddleWetness > 0.0f ? 1.0f : 0.0f);
 }
 
+// Snowflakes drift down around the camera, lit by the current light.
+void drawSnow()
+{
+	if (snowAmount <= 0.0f)
+		return;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::vec3 velocity = glm::vec3(WIND_VELOCITY.x * 0.6f, -1.4f, WIND_VELOCITY.y * 0.6f);
+
+	GLuint p = snowShader.shaderProgram;
+	snowShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(glGetUniformLocation(p, "snowVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(glGetUniformLocation(p, "snowBoxSize"), 1, glm::value_ptr(glm::vec3(36.0f, 24.0f, 36.0f)));
+	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniform3fv(glGetUniformLocation(p, "snowColor"), 1, glm::value_ptr(snowColor));
+	snow.Draw(snowShader, snowAmount);
+}
+
 // Fireflies come out after dusk and hide when it rains.
 void drawFireflies()
 {
-	float visibility = glm::smoothstep(0.5f, 0.9f, nightFactor) * (1.0f - rainAmount);
+	float visibility = glm::smoothstep(0.5f, 0.9f, nightFactor) * (1.0f - overcast);
 	if (visibility <= 0.01f)
 		return;
 	GLuint p = firefliesShader.shaderProgram;
@@ -924,8 +972,8 @@ void drawRain()
 void setCloudUniforms(GLuint program)
 {
 	glUniform2fv(glGetUniformLocation(program, "cloudOffset"), 1, glm::value_ptr(cloudOffset));
-	// Rain brings full overcast regardless of the chosen cover.
-	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), glm::mix(cloudCoverage, 1.0f, rainAmount));
+	// Rain and snow bring full overcast regardless of the chosen cover.
+	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), glm::mix(cloudCoverage, 1.0f, overcast));
 }
 
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
@@ -1030,6 +1078,23 @@ void updateDayNight()
 	skyColor = lerp3(skyColor, glm::vec3(skyGrey), rainAmount * 0.8f);
 	rainColor = glm::min(ambient * 1.5f + directColor * 0.4f + glm::vec3(0.1f), glm::vec3(1.0f));
 
+	// Snow: a softer, brighter overcast than rain. Falling snow lights up a bit (it scatters light).
+	float snowTarget = snowing ? 1.0f : 0.0f;
+	snowAmount += glm::clamp(snowTarget - snowAmount, -rainStep, rainStep);
+	overcast = glm::max(rainAmount, snowAmount);
+	directColor *= 1.0f - 0.5f * snowAmount;
+	moonGlow *= 1.0f - snowAmount;
+	float snowGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.85f;
+	skyColor = lerp3(skyColor, glm::vec3(snowGrey) * glm::vec3(0.95f, 0.97f, 1.0f), snowAmount * 0.8f);
+	ambient += glm::vec3(0.04f, 0.045f, 0.05f) * snowAmount * daylight;
+	snowColor = glm::min(ambient * 2.5f + directColor * 0.8f + glm::vec3(0.12f), glm::vec3(1.0f));
+
+	if (snowAmount > 0.2f)
+		snowCover += frameDt * snowAmount / SNOW_COVER_SECONDS;
+	else
+		snowCover -= frameDt * (1.0f + 2.0f * daylight) / SNOW_MELT_SECONDS + frameDt * rainAmount / 20.0f;
+	snowCover = glm::clamp(snowCover, 0.0f, 1.0f);
+
 	if (rainAmount > 0.2f)
 		puddleWetness += frameDt * rainAmount / PUDDLE_FILL_SECONDS;
 	else if (rainAmount <= 0.0f)
@@ -1065,7 +1130,7 @@ void updateDayNight()
 	// Clouds take the colour of whatever lights them: white by day, orange at sunset,
 	// blue-grey under the moon, near-black silhouettes on a moonless night.
 	cloudOffset += WIND_VELOCITY * frameDt;
-	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount);
+	cloudLitColor = glm::min(ambient * 2.0f + directColor * 0.9f, glm::vec3(1.0f)) * (1.0f - 0.45f * rainAmount - 0.15f * snowAmount);
 	cloudShadowColor = (ambient * 1.5f + skyColor * 0.1f) * (1.0f - 0.3f * rainAmount);
 	cloudLitColor += glm::vec3(0.5f, 0.55f, 0.75f) * flash; // clouds light up from inside
 	cloudShadowColor += glm::vec3(0.3f, 0.33f, 0.45f) * flash;
@@ -1076,6 +1141,8 @@ void updateDayNight()
 	glUniform3fv(ambientLightLoc, 1, glm::value_ptr(ambient));
 	glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogColor));
 	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowAmount"), snowAmount);
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowCover"), snowCover);
 
 	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
 }
@@ -1461,7 +1528,7 @@ void renderScene()
 
 	skyboxShader.useShaderProgram();
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor) * (1.0f - rainAmount));
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor) * (1.0f - overcast));
 	glUniformMatrix3fv(glGetUniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
@@ -1485,6 +1552,7 @@ void renderScene()
 	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
 	drawFireflies();
 	drawRain();
+	drawSnow();
 
 }
 
