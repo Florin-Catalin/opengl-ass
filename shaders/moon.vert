@@ -9,11 +9,13 @@ uniform mat4 view;
 uniform mat4 projection;
 
 out vec3 normalWorld;
+out vec3 fragPosWorld;
 out vec2 fragTexCoords;
 
 void main()
 {
 	normalWorld = mat3(model) * vNormal; // model is rotation + uniform scale
 	fragTexCoords = vTexCoords;
+	fragPosWorld = vec3(model * vec4(vPosition, 1.0f));
 	gl_Position = projection * view * model * vec4(vPosition, 1.0f);
 }

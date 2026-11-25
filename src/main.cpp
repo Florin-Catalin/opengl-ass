@@ -629,6 +629,8 @@ void drawMoon()
 	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 	glUniform3fv(glGetUniformLocation(moonShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
 	glUniform1f(glGetUniformLocation(moonShader.shaderProgram, "moonAlpha"), alpha);
+	glUniform3fv(glGetUniformLocation(moonShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	setCloudUniforms(moonShader.shaderProgram);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
