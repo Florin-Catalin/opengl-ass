@@ -1,6 +1,6 @@
 ![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
 # OpenGL-Application
-A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon and twinkling stars, a flickering campfire light, fog, a skybox and shadow mapping.
+A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), a flickering campfire light, fog, a skybox and shadow mapping.
 
 ![Preview](UngureanuFlorin-Catalin_30434.png)
 
@@ -38,6 +38,7 @@ cmake --build build --target run
 | K / L | Rotate the sun/moon path |
 | N | Pause / resume the day/night cycle |
 | T | Skip ahead 3 hours |
+| P | Skip ahead 10 days (watch the planets move) |
 | F / G | Fog on / off |
 | B | Campfire light on / off |
 | H / J | Lamp (warm point light) on / off |

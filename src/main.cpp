@@ -19,6 +19,7 @@
 #include "Shader.hpp"
 #include "Camera.hpp"
 #include "SkyBox.hpp"
+#include "Planets.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -79,8 +80,17 @@ const glm::vec3 MOON_MODEL_CENTER = glm::vec3(0.0f, 10.2f, 0.0f); // the OBJ sit
 const float MOON_DISTANCE = 300.0f; // well inside the 1000-unit far plane
 const float MOON_SCALE = 1.2f;
 
-// Stars: the star sphere turns with the sun and moon (same arc and K/L azimuth).
-glm::mat3 starRotation = glm::mat3(1.0f);      // model radius ~10, so ~12 units across 300 units
+// Stars: the star sphere turns with the sun and moon (same arc and K/L azimuth), and drifts
+// about 1 degree per day relative to the sun, as the real sky does over a year.
+glm::mat3 starRotation = glm::mat3(1.0f);
+
+// Planets. The calendar starts at J2000 + 6815 days (late August 2018), when Venus was the
+// evening star and Mars (near opposition), Jupiter and Saturn were all up in the evening.
+const double PLANET_START_DAY = 6815.0;
+int dayCount = 0; // whole days elapsed in the scene
+glm::vec3 planetDirs[gps::PLANET_COUNT];
+glm::vec3 planetColors[gps::PLANET_COUNT];
+float planetBrightness[gps::PLANET_COUNT];      // model radius ~10, so ~12 units across 300 units
 
 // Campfire inside the house model (center of its stone ring, in model space).
 const glm::vec3 FIRE_POS_MODEL = glm::vec3(-3.15f, 0.5f, -5.53f);
@@ -197,8 +207,16 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 	if (key == GLFW_KEY_B && action == GLFW_PRESS)
 		fireOn = !fireOn;
 
-	if (key == GLFW_KEY_T && action == GLFW_PRESS)
-		timeOfDay = fmodf(timeOfDay + 0.125f, 1.0f);
+	if (key == GLFW_KEY_T && action == GLFW_PRESS) {
+		timeOfDay += 0.125f;
+		if (timeOfDay >= 1.0f) {
+			timeOfDay -= 1.0f;
+			dayCount++;
+		}
+	}
+
+	if (key == GLFW_KEY_P && action == GLFW_PRESS)
+		dayCount += 10; // watch the planets move against the stars
 
 	if (key >= 0 && key < 1024)
 	{
@@ -603,6 +621,44 @@ void drawMoon()
 	glDisable(GL_BLEND);
 }
 
+// Places the planets and the star field for the current date and time.
+// In the sky's own (sun-locked) frame the sun sits at sunDir0 = (2, 0, 1); the ecliptic is the
+// great circle through it, with "east" (towards the evening sky) along (0, -1, 0).
+// skyTurn maps that frame to world space; daylight is 1 at day, 0 at night.
+void updatePlanets(const glm::mat3& skyTurn, float daylight)
+{
+	const glm::vec3 sunDir0 = glm::normalize(glm::vec3(2.0f, 0.0f, 1.0f));
+	const glm::vec3 east = glm::vec3(0.0f, -1.0f, 0.0f);
+	const glm::vec3 eclipticPole = glm::cross(sunDir0, east);
+
+	double days = PLANET_START_DAY + dayCount + timeOfDay;
+	gps::PlanetSighting sightings[gps::PLANET_COUNT];
+	double sunLongitude = gps::computePlanets(days, sightings);
+
+	// Stars keep fixed ecliptic longitudes, so in the sun-locked frame they slide back by the
+	// sun's longitude; mapping world -> star sphere undoes that.
+	glm::mat3 yearTurn = glm::mat3(glm::rotate(glm::mat4(1.0f), (float)glm::radians(sunLongitude), eclipticPole));
+	starRotation = yearTurn * glm::transpose(skyTurn);
+
+	// Faintest magnitude visible: about -5 in daylight (nothing), +6 at full night.
+	float night = glm::smoothstep(0.5f, 1.0f, 1.0f - daylight);
+	float limitingMagnitude = glm::mix(-5.0f, 6.0f, night);
+
+	for (int k = 0; k < gps::PLANET_COUNT; k++) {
+		float e = glm::radians(sightings[k].elongationDeg);
+		float b = glm::radians(sightings[k].latitudeDeg);
+		glm::vec3 local = cosf(b) * (cosf(e) * sunDir0 + sinf(e) * east) + sinf(b) * eclipticPole;
+		planetDirs[k] = skyTurn * local;
+		planetColors[k] = gps::PLANETS[k].color;
+
+		float m = sightings[k].magnitude;
+		float twilightFade = glm::clamp((limitingMagnitude - m) / 1.5f, 0.0f, 1.0f);
+		float glareFade = glm::smoothstep(10.0f, 18.0f, fabsf(sightings[k].elongationDeg)); // lost in the sun's glare
+		float brightness = glm::clamp(0.55f + 0.22f * (0.5f - m), 0.3f, 1.7f); // magnitude -> display
+		planetBrightness[k] = brightness * twilightFade * glareFade;
+	}
+}
+
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
 {
 	return a + (b - a) * glm::clamp(t, 0.0f, 1.0f);
@@ -630,8 +686,13 @@ void updateFireLight(const glm::mat4& houseModel)
 // Advances the clock and uploads sun/moon direction, light colors, fog and sky tint.
 void updateDayNight()
 {
-	if (dayNightRunning)
-		timeOfDay = fmodf(timeOfDay + frameDt / DAY_LENGTH_SECONDS, 1.0f);
+	if (dayNightRunning) {
+		timeOfDay += frameDt / DAY_LENGTH_SECONDS;
+		if (timeOfDay >= 1.0f) {
+			timeOfDay -= 1.0f;
+			dayCount++;
+		}
+	}
 
 	// The sun moves on a circle in the XY plane (offset in Z so lookAt never sees a vertical
 	// direction); the moon is opposite. K/L still rotate the whole arc around Y.
@@ -645,7 +706,6 @@ void updateDayNight()
 	// sunDir is the fixed vector (2, 0, 1) rotated by theta around Z, then by the azimuth around Y.
 	// The inverse of that rotation maps a world direction into the star sphere's frame.
 	glm::mat4 skyTurn = azimuth * glm::rotate(glm::mat4(1.0f), theta, glm::vec3(0.0f, 0.0f, 1.0f));
-	starRotation = glm::transpose(glm::mat3(skyTurn));
 	sunSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(sunDir, 0.0f)));
 	moonSkyDir = glm::normalize(glm::vec3(azimuth * glm::vec4(moonDir, 0.0f)));
 
@@ -661,6 +721,7 @@ void updateDayNight()
 	// 1 at day, 0 at night, with a short twilight around the horizon.
 	float daylight = glm::smoothstep(-0.15f, 0.2f, elevation);
 	nightFactor = 1.0f - daylight;
+	updatePlanets(glm::mat3(skyTurn), daylight);
 	float twilight = 1.0f - glm::smoothstep(0.0f, 0.3f, fabsf(elevation));
 	glm::vec3 ambient = lerp3(glm::vec3(0.04f, 0.05f, 0.1f), glm::vec3(0.2f), daylight);
 	skyColor = lerp3(glm::vec3(0.08f, 0.1f, 0.22f), glm::vec3(1.0f), daylight);
@@ -1010,6 +1071,9 @@ void renderScene()
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor));
 	glUniformMatrix3fv(glGetUniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
+	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
+	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawMoon();
 

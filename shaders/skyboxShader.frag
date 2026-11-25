@@ -11,6 +11,12 @@ uniform float starVisibility; // 0 by day, 1 at full night
 uniform mat3 starRotation;    // world direction -> star-sphere direction
 uniform float time;           // seconds, for twinkling
 
+// Planets: steady (non-twinkling) points. Brightness already includes twilight and sun-glare fades.
+const int PLANET_COUNT = 4;
+uniform vec3 planetDir[PLANET_COUNT];         // world direction
+uniform vec3 planetColor[PLANET_COUNT];
+uniform float planetBrightness[PLANET_COUNT]; // 0 = invisible, ~1.6 = Venus at its brightest
+
 // Integer hash (PCG-style) -> 3 floats in [0, 1).
 vec3 hash3(ivec3 c)
 {
@@ -39,16 +45,35 @@ vec3 starLayer(vec3 dir, float cells, float density, float radius, float brightn
 	return tint * core * brightness * twinkle * (0.5 + 0.5 * rnd.z);
 }
 
+// A planet: a sharp disc a few pixels wide plus a soft glow that grows with brightness,
+// which is how a bright planet reads to the eye. Distances are angles in radians.
+vec3 planet(vec3 dir, int i)
+{
+	float b = planetBrightness[i];
+	if (b <= 0.0)
+		return vec3(0.0);
+	float d = length(dir - planetDir[i]);
+	float core = smoothstep(0.0012 + 0.0016 * b, 0.0, d) * min(b, 1.0);
+	float glow = exp(-d / (0.003 * b)) * 0.35 * b;
+	return planetColor[i] * (core + glow);
+}
+
 void main()
 {
 	color = texture(skybox, textureCoordinates) * vec4(skyTint, 1.0);
 
+	vec3 dir = normalize(textureCoordinates);
+	float horizonFade = smoothstep(-0.02, 0.15, dir.y); // haze near the horizon
+
 	if (starVisibility > 0.0) {
-		vec3 dir = normalize(textureCoordinates);
 		vec3 starDir = starRotation * dir;
 		vec3 stars = starLayer(starDir, 90.0, 0.06, 0.22, 1.2)   // sparse, bright
 		           + starLayer(starDir, 220.0, 0.05, 0.25, 0.6); // dense, faint
-		float horizonFade = smoothstep(-0.02, 0.15, dir.y);      // haze near the horizon
 		color.rgb += stars * starVisibility * horizonFade;
 	}
+
+	vec3 planets = vec3(0.0);
+	for (int i = 0; i < PLANET_COUNT; i++)
+		planets += planet(dir, i);
+	color.rgb += planets * horizonFade;
 }
