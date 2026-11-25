@@ -27,7 +27,23 @@ namespace gps {
 
         //convert stream into GLchar array
         shaderString = shaderStringStream.str();
-        return shaderString;
+
+        // Expand `#include "file"` lines (path relative to this shader's folder), so shaders
+        // can share code such as the cloud layer. GLSL itself has no include directive.
+        std::string folder = fileName.substr(0, fileName.find_last_of('/') + 1);
+        std::istringstream lines(shaderString);
+        std::string line, expanded;
+        while (std::getline(lines, line)) {
+            size_t open = line.find("#include \"");
+            if (open == 0) {
+                size_t close = line.find('"', 10);
+                expanded += readShaderFile(folder + line.substr(10, close - 10));
+            }
+            else {
+                expanded += line + "\n";
+            }
+        }
+        return expanded;
     }
 
     void Shader::shaderCompileLog(GLuint shaderId)
