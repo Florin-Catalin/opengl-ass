@@ -19,6 +19,7 @@ add_executable(opengl_scene
   src/Model3D.cpp
   src/Rain.cpp
   src/Lightning.cpp
+  src/Fireflies.cpp
   src/Shader.cpp
   src/SkyBox.cpp
   src/stb_image.c)
