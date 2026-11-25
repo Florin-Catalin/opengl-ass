@@ -37,6 +37,7 @@ uniform vec4 meteorState[MAX_METEORS];   // x = head angle travelled, y = tail l
 // so it reads well on screen.
 uniform vec3 sunDirWorld;
 uniform float rainbowStrength; // 0 = none; set from the time since the rain stopped and the sun height
+uniform float auroraStrength;  // 0..1: northern lights (clear night over full snow cover)
 uniform float sandAmount;      // 0..1 sandstorm: dust hides the sky, thickest at the horizon
 uniform vec3 dustColor;        // matches the scene fog colour, so the ground fades into the sky
 uniform vec2 dustOffset;       // how far the dust billows have blown
@@ -154,6 +155,38 @@ vec3 meteor(vec3 dir, int i)
 	return meteorState[i].z * (tint * line * trail + headColor * headGlow * 0.8);
 }
 
+// Aurora borealis: two wavy curtains low in the northern sky (towards -z). The ray is projected
+// onto a stack of horizontal layers between 100 and 190 units up, so each curtain has a sharp,
+// green lower edge and fades upwards into red-purple, with fine vertical rays drifting along it.
+vec3 aurora(vec3 dir)
+{
+	if (dir.y < 0.02)
+		return vec3(0.0);
+	const int LAYERS = 26;
+	vec3 sum = vec3(0.0);
+	// A per-pixel offset between layers hides the steps between them (dithering).
+	float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+	for (int i = 0; i < LAYERS; i++) {
+		float f = (float(i) + jitter) / float(LAYERS); // 0 = bottom of the curtain, 1 = top
+		vec2 p = dir.xz / dir.y * (100.0 + f * 90.0);
+		vec3 tint = mix(vec3(0.15, 1.0, 0.45), vec3(0.75, 0.2, 0.85), smoothstep(0.3, 0.95, f));
+		float fade = smoothstep(0.0, 0.1, f) * pow(max(1.0 - f, 0.0), 1.5); // max: i/(n-1) can round above 1
+		for (int k = 0; k < 2; k++) {
+			float fk = float(k);
+			float centre = -230.0 - 120.0 * fk;
+			float sway = 70.0 * sin(p.x * 0.008 + time * 0.07 + fk * 2.0)
+			           + 110.0 * (cloudFbm(vec2(p.x * 0.0025 + fk * 7.0, time * 0.02)) - 0.5);
+			float band = exp(-abs(p.y - centre - sway) / (5.0 + 4.0 * fk));
+			float rays = cloudValueNoise(vec2(p.x * 0.12 + time * 0.35 + fk * 31.0, f * 1.2 + fk));
+			rays = 0.15 + 0.85 * rays * rays * 1.6; // sharp bright rays with dimmer gaps
+			sum += tint * band * rays * fade * (1.0 - 0.35 * fk);
+		}
+	}
+	// It slowly brightens and fades, like a real display.
+	float pulse = 0.75 + 0.25 * sin(time * 0.4) * sin(time * 0.17 + 1.0);
+	return sum * (6.0 / float(LAYERS)) * pulse;
+}
+
 void main()
 {
 	color = texture(skybox, textureCoordinates) * vec4(skyTint, 1.0);
@@ -176,6 +209,9 @@ void main()
 		           + starLayer(starDir, 220.0, 0.05, 0.25, 0.6); // dense, faint
 		color.rgb += stars * starVisibility * horizonFade * starMaskNearPlanets(dir) * moonStarMask;
 	}
+
+	if (auroraStrength > 0.0)
+		color.rgb += aurora(dir) * auroraStrength * smoothstep(0.0, 0.12, dir.y);
 
 	vec3 planets = vec3(0.0);
 	for (int i = 0; i < PLANET_COUNT; i++)

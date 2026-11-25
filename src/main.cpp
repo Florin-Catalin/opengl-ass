@@ -150,6 +150,9 @@ gps::Tornado tornado;
 gps::Shader tornadoShader;
 gps::Shader tornadoDebrisShader;
 
+// Aurora borealis: only on clear nights over a fully snow-covered land (a cold, northern night).
+float auroraStrength = 0.0f;
+
 // The largest of rainAmount, snowAmount, sandAmount and tornadoAmount: how much the weather closes in.
 float overcast = 0.0f;
 
@@ -1247,6 +1250,11 @@ void updateDayNight()
 		snowCover -= frameDt * (0.03f + 0.97f * daylight) / SNOW_MELT_SECONDS + frameDt * rainAmount / 20.0f;
 	snowCover = glm::clamp(snowCover, 0.0f, 1.0f);
 
+	// The aurora needs deep night, a full snow blanket and a clear sky (not while it is snowing).
+	auroraStrength = glm::smoothstep(0.7f, 0.95f, nightFactor) * glm::smoothstep(0.85f, 0.98f, snowCover) *
+		(1.0f - overcast);
+	ambient += glm::vec3(0.012f, 0.045f, 0.028f) * auroraStrength; // a faint green glow on the snow
+
 	if (rainAmount > 0.2f)
 		puddleWetness += frameDt * rainAmount / PUDDLE_FILL_SECONDS;
 	else if (rainAmount <= 0.0f)
@@ -1703,6 +1711,7 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "rainbowStrength"), rainbowStrength);
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "sandAmount"), sandAmount);
+	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "auroraStrength"), auroraStrength);
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustColor"), 1, glm::value_ptr(dustColor));
 	glUniform2fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
 	updateMeteors(skyboxShader.shaderProgram, glm::mix(0.3f, 1.0f, glm::smoothstep(0.3f, 0.9f, nightFactor)));
