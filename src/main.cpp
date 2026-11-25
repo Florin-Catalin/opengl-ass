@@ -110,6 +110,12 @@ gps::Fireflies fireflies;
 gps::Shader firefliesShader;
 const int FIREFLY_COUNT = 160;
 
+// Puddles: fill up while it rains (about 15 s) and dry slowly afterwards (about 90 s).
+float puddleWetness = 0.0f;
+const float PUDDLE_FILL_SECONDS = 15.0f;
+const float PUDDLE_DRY_SECONDS = 90.0f;
+const GLint SKYBOX_TEXTURE_UNIT = 5; // the scene shader samples the sky cubemap here for puddles
+
 // Lightning: random strikes every 4-12 s while it rains hard; Z strikes immediately.
 gps::Lightning lightning;
 gps::Shader lightningShader;
@@ -659,6 +665,8 @@ void initUniforms()
 	fireLightPosEyeLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireLightPosEye");
 	fireColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireColor");
 	fireIntensityLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireIntensity");
+	// samplerCube must not default to unit 0, where a 2D texture is bound.
+	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "skyboxCube"), SKYBOX_TEXTURE_UNIT);
 	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
 	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
 
@@ -803,6 +811,25 @@ void updateMeteors(GLuint program, float visibility)
 		glUniform3fv(glGetUniformLocation(program, "meteorTangent"), n, glm::value_ptr(tangents[0]));
 		glUniform4fv(glGetUniformLocation(program, "meteorState"), n, glm::value_ptr(states[0]));
 	}
+}
+
+// Everything the scene shader needs to draw reflective puddles (it must be bound).
+void uploadPuddleUniforms()
+{
+	GLuint p = myCustomShader.shaderProgram;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glUniform1f(glGetUniformLocation(p, "puddleWetness"), puddleWetness);
+	glUniform1f(glGetUniformLocation(p, "puddleSurface"), 0.0f);
+	glUniform3fv(glGetUniformLocation(p, "skyTint"), 1, glm::value_ptr(skyColor));
+	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(glGetUniformLocation(p, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
+	glUniform1f(glGetUniformLocation(p, "moonVisibility"), glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
+	glUniform3fv(glGetUniformLocation(p, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
+	glUniform3fv(glGetUniformLocation(p, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_UNIT);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, mySkyBox.GetTextureId());
+	glActiveTexture(GL_TEXTURE0);
 }
 
 // Fireflies come out after dusk and hide when it rains.
@@ -956,6 +983,12 @@ void updateDayNight()
 	float skyGrey = glm::dot(skyColor, glm::vec3(0.3f, 0.5f, 0.2f)) * 0.6f;
 	skyColor = lerp3(skyColor, glm::vec3(skyGrey), rainAmount * 0.8f);
 	rainColor = glm::min(ambient * 1.5f + directColor * 0.4f + glm::vec3(0.1f), glm::vec3(1.0f));
+
+	if (rainAmount > 0.2f)
+		puddleWetness += frameDt * rainAmount / PUDDLE_FILL_SECONDS;
+	else if (rainAmount <= 0.0f)
+		puddleWetness -= frameDt / PUDDLE_DRY_SECONDS;
+	puddleWetness = glm::clamp(puddleWetness, 0.0f, 1.0f);
 
 	// Lightning while it rains hard. Each strike flashes the whole scene and lights the sky.
 	double now = glfwGetTime();
@@ -1181,6 +1214,7 @@ void renderScene()
 	// lamp toggle (H/J); must be sent while this program is bound
 	glUniform1i(lightsOnLoc, lightsOn);
 	setCloudUniforms(myCustomShader.shaderProgram);
+	uploadPuddleUniforms();
 
 	// same model matrix the house is drawn with below
 	updateFireLight(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0)));
@@ -1235,7 +1269,10 @@ void renderScene()
 	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
 	//send normal matrix data to shader
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	// Puddles only form on the terrain, not on roofs or the tank.
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 1.0f);
 	grass.Draw(myCustomShader);
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
 
 
 	

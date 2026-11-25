@@ -13,6 +13,8 @@ out vec4 fragPosLightSpace;
 out vec2 fragTexCoords;
 
 out vec4 fragPos;
+out vec3 normalWorld; // for puddles (model matrices are rotations, so mat3(model) is fine)
+out vec3 posModel;    // puddle pattern stays fixed to the terrain when the scene rotates
 
 uniform mat4 model;
 uniform mat4 view;
@@ -29,4 +31,6 @@ void main()
 	gl_Position = projection * view * model * vec4(vPosition, 1.0f);
 
 	fragPos = model * vec4(vPosition, 1.0f);
+	normalWorld = mat3(model) * vNormal;
+	posModel = vPosition;
 }

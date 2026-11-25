@@ -5,6 +5,8 @@ in vec4 fragPosEye;
 in vec4 fragPosLightSpace;
 in vec2 fragTexCoords;
 in vec4 fragPos;
+in vec3 normalWorld;
+in vec3 posModel;
 
 out vec4 fColor;
 
@@ -32,6 +34,19 @@ uniform float fireIntensity;
 #include "clouds.glsl"
 
 uniform float rainAmount; // 0..1: wet surfaces (darker, shinier) and thicker haze
+
+// Puddles: on the terrain only, filled by rain and drying slowly. They mirror the sky (skybox,
+// clouds, moon) and show raindrop ripples while it rains.
+uniform float puddleSurface;  // 1 while drawing the terrain, 0 for everything else
+uniform float puddleWetness;  // 0 = dry .. 1 = puddles at their largest
+uniform samplerCube skyboxCube;
+uniform vec3 skyTint;
+uniform vec3 cameraPosWorld;
+uniform vec3 moonDirWorld;
+uniform float moonVisibility;
+uniform vec3 cloudLitColor;
+uniform vec3 cloudShadowColor;
+uniform float time;
 
 
 //fog
@@ -148,6 +163,71 @@ vec3 computeFireLight(vec3 albedo, vec3 specMap)
 	return fireColor * attenuation * (diff * albedo + 1.5f * spec * specStrength);
 }
 
+// Expanding rings where raindrops hit the water. Returns a sideways tilt for the surface normal.
+vec2 rainRipples(vec2 p)
+{
+	vec2 tilt = vec2(0.0);
+	for (int layer = 0; layer < 2; layer++) {
+		vec2 q = p * (3.0 + 2.0 * float(layer)) + float(layer) * 17.0;
+		ivec2 cell = ivec2(floor(q));
+		for (int dx = -1; dx <= 1; dx++)
+		for (int dy = -1; dy <= 1; dy++) {
+			ivec2 c = cell + ivec2(dx, dy);
+			float h = cloudHash(c + ivec2(layer * 101, 7));
+			vec2 center = vec2(c) + vec2(cloudHash(c + ivec2(3, 11)), cloudHash(c + ivec2(19, 5)));
+			float age = fract(time * (0.6 + 0.4 * h) + h); // each drop restarts on its own clock
+			vec2 d = q - center;
+			float r = length(d);
+			float front = r - age * 0.9;                    // the ring grows outwards
+			float ring = sin(front * 25.0) * smoothstep(0.15, 0.0, abs(front)) * (1.0 - age);
+			tilt += ring * d / max(r, 1e-3);
+		}
+	}
+	return tilt * 0.15;
+}
+
+// What a puddle mirrors in direction R: the skybox, then clouds, then the moon (with its halo).
+vec3 reflectedSky(vec3 R)
+{
+	vec3 sky = texture(skyboxCube, R).rgb * skyTint;
+	float cloud = cloudDensityAlong(fragPos.xyz, R);
+	sky = mix(sky, mix(cloudShadowColor, cloudLitColor, 0.6f), cloud);
+
+	float m = clamp(dot(R, moonDirWorld), -1.0f, 1.0f);
+	float disc = smoothstep(cos(0.045f), cos(0.035f), m);           // moon is ~0.04 rad across
+	float halo = exp(-max(acos(m) - 0.04f, 0.0f) / 0.06f) * 0.35f;
+	sky += (vec3(0.8f, 0.88f, 1.0f) * disc + vec3(0.45f, 0.6f, 1.0f) * halo) * moonVisibility * (1.0f - cloud);
+	return sky;
+}
+
+// Puddles on flat terrain. Returns the colour with puddles (and their damp rims) applied.
+vec3 applyPuddles(vec3 color)
+{
+	if (puddleSurface < 0.5f || puddleWetness <= 0.0f)
+		return color;
+
+	float flatness = smoothstep(0.9f, 0.97f, normalize(normalWorld).y);
+	float n = cloudFbm(posModel.xz * 0.18f + vec2(37.0f, 11.0f));
+	float threshold = mix(0.78f, 0.58f, puddleWetness);             // wetter -> bigger puddles
+	float puddle = smoothstep(threshold, threshold + 0.04f, n) * flatness;
+	float damp = smoothstep(threshold - 0.08f, threshold, n) * flatness;
+	color *= 1.0f - 0.35f * damp * puddleWetness;                    // dark wet ground around them
+	if (puddle <= 0.0f)
+		return color;
+
+	vec2 tilt = rainRipples(posModel.xz) * rainAmount;
+	vec3 N = normalize(vec3(tilt.x, 1.0f, tilt.y));
+	vec3 V = normalize(cameraPosWorld - fragPos.xyz);
+	vec3 R = reflect(-V, N);
+	R.y = abs(R.y); // ripples must not make it look under the ground
+
+	// Water reflects little straight down and almost everything at grazing angles (Fresnel).
+	float fresnel = 0.04f + 0.96f * pow(1.0f - max(dot(N, V), 0.0f), 5.0f);
+	float reflectivity = mix(0.35f, 1.0f, fresnel);
+	vec3 water = mix(color * 0.5f, reflectedSky(R), reflectivity);
+	return mix(color, water, puddle);
+}
+
 float computeFog()
 {
  float fogDensity = 0.010f + 0.025f * rainAmount;
@@ -187,7 +267,7 @@ void main()
 	//modulate with shadow (the sun/moon shadow map does not apply to the fire)
 	vec3 color = min((ambient + (1.0f - shadow)*diffuse) + (1.0f - shadow)*specular
 		+ computeFireLight(albedo, specMap), 1.0f);
-    vec3 colorFinal = min(color, 1.0f);
+    vec3 colorFinal = applyPuddles(min(color, 1.0f));
 
 	// Fog when switched on (F), and rain haze while it rains.
 	float fogAmount = max(startFog.x, 0.85f * rainAmount);
