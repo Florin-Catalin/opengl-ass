@@ -218,6 +218,14 @@ void move(gps::MOVE_DIRECTION direction, float speed)
 	}
 }
 
+// The tank turns with its heading (angleF), so it drives along its own long axis.
+glm::mat4 tankModelMatrix()
+{
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angleTank), glm::vec3(0, 1, 0));
+	m = glm::translate(m, tankPosition);
+	return glm::rotate(m, angleF, glm::vec3(0, 1, 0));
+}
+
 bool isWireframe = false;
 
 bool startFog = false;
@@ -686,8 +694,8 @@ void renderScene()
 		glm::value_ptr(model));
 	//goat3.Draw(depthMapShader);
 
-	//create model matrix for farmer
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	//create model matrix for the tank (farmer.obj)
+	model = tankModelMatrix();
 	//send model matrix to shader
 	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
@@ -857,9 +865,7 @@ void renderScene()
 	
 
 	//create model matrix for farmer
-	model = glm::rotate(glm::mat4(1.0f), glm::radians(angleTank), glm::vec3(0, 1, 0));
-	model = glm::translate(model, tankPosition);
-	//model = glm::rotate(model, angleTank, glm::vec3(0.0f, 1.0f, 0.0f));
+	model = tankModelMatrix();
 	//send model matrix data to shader
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 	//compute normal matrix
