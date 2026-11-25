@@ -78,6 +78,22 @@ glm::vec3 cloudLitColor = glm::vec3(1.0f);
 glm::vec3 cloudShadowColor = glm::vec3(0.6f);
 void setCloudUniforms(GLuint program);
 
+// Shooting stars, spawned with M. They are drawn in the skybox shader (behind the clouds).
+struct Meteor
+{
+	glm::vec3 start;   // unit direction where it appears
+	glm::vec3 tangent; // unit direction of travel, perpendicular to start
+	double spawnTime;
+	float duration;    // seconds
+	float arc;         // total angle travelled (radians)
+	float tail;        // trail length (radians)
+	float brightness;
+	float fireball;    // 0 = ordinary white meteor, 1 = bright green-orange fireball
+};
+const int MAX_METEORS = 8; // must match the skybox shader
+std::vector<Meteor> meteors;
+void spawnMeteor();
+
 // Rain, toggled with R. rainAmount eases towards 0 or 1 so storms roll in and clear up gradually.
 bool raining = false;
 float rainAmount = 0.0f;
@@ -239,6 +255,9 @@ void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int
 
 	if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS)
 		cloudCoverage = glm::min(cloudCoverage + 0.15f, 1.0f);
+
+	if (key == GLFW_KEY_M && action == GLFW_PRESS)
+		spawnMeteor();
 
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 		raining = !raining;
@@ -688,6 +707,74 @@ void updatePlanets(const glm::mat3& skyTurn, float daylight)
 		float glareFade = glm::smoothstep(10.0f, 18.0f, fabsf(sightings[k].elongationDeg)); // lost in the sun's glare
 		float brightness = glm::clamp(0.55f + 0.22f * (0.5f - m), 0.3f, 1.7f); // magnitude -> display
 		planetBrightness[k] = brightness * twilightFade * glareFade * (1.0f - rainAmount);
+	}
+}
+
+static float randomRange(float lo, float hi)
+{
+	return lo + (hi - lo) * (rand() / (float)RAND_MAX);
+}
+
+// Adds a meteor somewhere in the upper sky, heading mostly downwards like a real one.
+void spawnMeteor()
+{
+	if ((int)meteors.size() >= MAX_METEORS)
+		meteors.erase(meteors.begin()); // replace the oldest
+
+	// Appear near where the camera is looking (so a key press is visible), a bit above the view
+	// centre, then fall down through the view.
+	Meteor m;
+	glm::vec3 forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
+	float lookAzimuth = atan2f(forward.z, forward.x);
+	float lookElevation = asinf(glm::clamp(forward.y, -1.0f, 1.0f));
+	float azimuth = lookAzimuth + glm::radians(randomRange(-35.0f, 35.0f));
+	float elevation = glm::clamp(lookElevation + glm::radians(randomRange(5.0f, 25.0f)), glm::radians(15.0f), glm::radians(80.0f));
+	m.start = glm::vec3(cosf(elevation) * cosf(azimuth), sinf(elevation), cosf(elevation) * sinf(azimuth));
+
+	// Pick a direction of travel in the sky at that point, tilted towards the horizon.
+	glm::vec3 side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), m.start));
+	glm::vec3 down = glm::cross(m.start, side);
+	if (down.y > 0.0f)
+		down = -down;
+	float slant = randomRange(-1.2f, 1.2f); // radians away from straight down
+	m.tangent = glm::normalize(cosf(slant) * down + sinf(slant) * side);
+
+	m.spawnTime = glfwGetTime();
+	m.duration = randomRange(0.5f, 1.1f);
+	m.arc = randomRange(0.25f, 0.5f);
+	m.tail = randomRange(0.08f, 0.16f);
+	m.fireball = randomRange(0.0f, 1.0f) < 0.12f ? 1.0f : 0.0f; // about 1 in 8 is a fireball
+	m.brightness = m.fireball > 0.0f ? randomRange(1.8f, 2.6f) : randomRange(0.8f, 1.4f);
+	meteors.push_back(m);
+}
+
+// Uploads the live meteors to the bound skybox program and drops the finished ones.
+void updateMeteors(GLuint program, float visibility)
+{
+	double now = glfwGetTime();
+	for (size_t i = 0; i < meteors.size();) {
+		if (now - meteors[i].spawnTime > meteors[i].duration)
+			meteors.erase(meteors.begin() + i);
+		else
+			i++;
+	}
+
+	glm::vec3 starts[MAX_METEORS], tangents[MAX_METEORS];
+	glm::vec4 states[MAX_METEORS];
+	int n = (int)meteors.size();
+	for (int i = 0; i < n; i++) {
+		const Meteor& m = meteors[i];
+		float t = (float)(now - m.spawnTime) / m.duration; // 0..1
+		float envelope = powf(sinf(glm::pi<float>() * t), 0.6f); // flare up, then burn out
+		starts[i] = m.start;
+		tangents[i] = m.tangent;
+		states[i] = glm::vec4(m.arc * t, glm::min(m.tail, m.arc * t + 0.01f), m.brightness * envelope * visibility, m.fireball);
+	}
+	glUniform1i(glGetUniformLocation(program, "meteorCount"), n);
+	if (n > 0) {
+		glUniform3fv(glGetUniformLocation(program, "meteorStart"), n, glm::value_ptr(starts[0]));
+		glUniform3fv(glGetUniformLocation(program, "meteorTangent"), n, glm::value_ptr(tangents[0]));
+		glUniform4fv(glGetUniformLocation(program, "meteorState"), n, glm::value_ptr(states[0]));
 	}
 }
 
@@ -1160,6 +1247,8 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
 	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
+	// Meteors are a night sight; by day only a faint trace shows (bright fireballs can be seen in daylight).
+	updateMeteors(skyboxShader.shaderProgram, glm::mix(0.3f, 1.0f, glm::smoothstep(0.3f, 0.9f, nightFactor)));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
 	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
 	setCloudUniforms(skyboxShader.shaderProgram);

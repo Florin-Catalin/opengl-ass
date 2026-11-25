@@ -23,6 +23,15 @@ uniform vec3 planetDir[PLANET_COUNT];         // world direction
 uniform vec3 planetColor[PLANET_COUNT];
 uniform float planetBrightness[PLANET_COUNT]; // 0 = invisible, ~1.6 = Venus at its brightest
 
+// Shooting stars (meteors), spawned with M. Each one is a short streak moving along a great
+// circle: it starts at meteorStart and moves towards meteorTangent.
+const int MAX_METEORS = 8;
+uniform int meteorCount;
+uniform vec3 meteorStart[MAX_METEORS];   // unit direction where it appears
+uniform vec3 meteorTangent[MAX_METEORS]; // unit direction of travel at the start (perpendicular)
+uniform vec4 meteorState[MAX_METEORS];   // x = head angle travelled, y = tail length (radians),
+                                         // z = brightness, w = fireball tint (0 = white, 1 = green-orange)
+
 // Moon halo: blue glow in the sky around the moon model, which is drawn after the skybox.
 uniform vec3 moonDirWorld;
 uniform float moonGlow; // 0 = moon down or daytime, 1 = full night with the moon up
@@ -85,6 +94,32 @@ float starMaskNearPlanets(vec3 dir)
 	return mask;
 }
 
+vec3 meteor(vec3 dir, int i)
+{
+	vec3 a = meteorStart[i];
+	vec3 t = meteorTangent[i];
+	vec3 axis = cross(a, t);              // pole of the meteor's great circle
+	float off = abs(dot(dir, axis));      // angular distance from the path
+	if (off > 0.02)
+		return vec3(0.0);
+	float along = atan(dot(dir, t), dot(dir, a)); // angle along the path from the start
+
+	float head = meteorState[i].x;
+	float tail = meteorState[i].y;
+	float behind = head - along;          // how far behind the head this pixel is
+	if (behind < -0.01 || behind > tail)
+		return vec3(0.0);
+
+	float width = 0.0012 + 0.0008 * meteorState[i].z;
+	float line = smoothstep(width, 0.0, off) * step(0.0, behind);
+	float trail = pow(1.0 - clamp(behind / tail, 0.0, 1.0), 2.0); // brightest at the head
+	float headGlow = exp(-length(vec2(off, behind)) / 0.004);
+
+	vec3 tint = mix(vec3(0.85, 0.92, 1.0), vec3(0.6, 1.0, 0.55), meteorState[i].w);
+	vec3 headColor = mix(vec3(1.0), vec3(1.0, 0.75, 0.4), meteorState[i].w);
+	return meteorState[i].z * (tint * line * trail + headColor * headGlow * 0.8);
+}
+
 void main()
 {
 	color = texture(skybox, textureCoordinates) * vec4(skyTint, 1.0);
@@ -112,6 +147,11 @@ void main()
 	for (int i = 0; i < PLANET_COUNT; i++)
 		planets += planet(dir, i);
 	color.rgb += planets * horizonFade;
+
+	vec3 meteors = vec3(0.0);
+	for (int i = 0; i < meteorCount; i++)
+		meteors += meteor(dir, i);
+	color.rgb += meteors * horizonFade;
 
 	// Clouds cover everything above (stars, planets, halo). Thick parts and parts with more cloud
 	// between them and the light are darker; thin edges near the sun or moon get a bright lining.
