@@ -113,6 +113,9 @@ float tankSpeed = 4.0f;     // units per second
 float tankTurnSpeed = 1.5f; // radians per second
 glm::vec3 tankPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 
+// Collision: the tank (farmer.obj) against the bounds of each mesh in the static scene objects.
+gps::Bounds tankBounds;
+std::vector<gps::Bounds> houseBounds, tentsBounds, woodBounds, rocketBounds;
 float frameDt = 0.0f; // seconds since the previous frame
 
 
@@ -226,6 +229,78 @@ glm::mat4 tankModelMatrix()
 	return glm::rotate(m, angleF, glm::vec3(0, 1, 0));
 }
 
+static void addFootprints(std::vector<gps::Footprint>& out, const std::vector<gps::Bounds>& parts, const glm::mat4& model)
+{
+	for (size_t i = 0; i < parts.size(); i++) {
+		// Skip flat decals and anything entirely above the tank.
+		if (parts[i].max.y - parts[i].min.y < 0.15f || parts[i].min.y > tankBounds.max.y)
+			continue;
+		out.push_back(gps::makeFootprint(parts[i], model));
+	}
+}
+
+// Footprints of everything the tank can hit, with the current scene rotation (Q/E).
+std::vector<gps::Footprint> sceneObstacles()
+{
+	glm::mat4 sceneModel = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	std::vector<gps::Footprint> obstacles;
+	addFootprints(obstacles, houseBounds, sceneModel);
+	addFootprints(obstacles, tentsBounds, sceneModel);
+	addFootprints(obstacles, woodBounds, sceneModel);
+	if (distanceRocket < 1.0f) // still on the launch pad
+		addFootprints(obstacles, rocketBounds, sceneModel);
+	return obstacles;
+}
+
+// Counts how many obstacles the tank overlaps in its current state.
+static int tankOverlapCount(const std::vector<gps::Footprint>& obstacles)
+{
+	gps::Footprint tank = gps::makeFootprint(tankBounds, tankModelMatrix());
+	int n = 0;
+	for (size_t i = 0; i < obstacles.size(); i++)
+		if (gps::footprintsOverlap(tank, obstacles[i]))
+			n++;
+	return n;
+}
+
+// Applies the arrow-key movement, then undoes it if it drives the tank into something.
+// Tries sliding along each axis before giving up, so the tank can scrape along walls.
+// A move that doesn't add new overlaps is allowed, so rotating the scene onto the tank
+// (Q/E) never leaves it stuck.
+void moveTankWithCollision()
+{
+	if (!pressedKeys[GLFW_KEY_UP] && !pressedKeys[GLFW_KEY_DOWN])
+		return;
+
+	std::vector<gps::Footprint> obstacles = sceneObstacles();
+	int before = tankOverlapCount(obstacles);
+	glm::vec3 oldPos = tankPosition;
+	float oldAngleF = angleF, oldAngleTank = angleTank;
+
+	gps::MOVE_DIRECTION dir = pressedKeys[GLFW_KEY_UP] ? gps::MOVE_FORWARD : gps::MOVE_BACKWARD;
+	angleTank += dir == gps::MOVE_FORWARD ? 0.0015f : -0.0015f;
+	if (pressedKeys[GLFW_KEY_LEFT])
+		move(gps::MOVE_LEFT, tankSpeed);
+	if (pressedKeys[GLFW_KEY_RIGHT])
+		move(gps::MOVE_RIGHT, tankSpeed);
+	move(dir, tankSpeed);
+
+	if (tankOverlapCount(obstacles) <= before)
+		return;
+
+	// Blocked: keep the old heading and try moving along X only, then Z only.
+	glm::vec3 delta = tankPosition - oldPos;
+	angleF = oldAngleF;
+	angleTank = oldAngleTank;
+	const glm::vec3 slides[2] = { glm::vec3(delta.x, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, delta.z) };
+	for (int i = 0; i < 2; i++) {
+		tankPosition = oldPos + slides[i];
+		if (tankOverlapCount(obstacles) <= before)
+			return;
+	}
+	tankPosition = oldPos;
+}
+
 bool isWireframe = false;
 
 bool startFog = false;
@@ -307,26 +382,7 @@ void processMovement()
 	}
 
 	
-	if (pressedKeys[GLFW_KEY_UP]) {
-		angleTank += 0.0015;
-		if (pressedKeys[GLFW_KEY_LEFT]) {
-			move(gps::MOVE_LEFT, tankSpeed);
-		}
-		if (pressedKeys[GLFW_KEY_RIGHT]) {
-			move(gps::MOVE_RIGHT, tankSpeed);
-		}
-		move(gps::MOVE_FORWARD, tankSpeed);
-	}
-	if (pressedKeys[GLFW_KEY_DOWN]) {
-		angleTank -= 0.0015;
-		if (pressedKeys[GLFW_KEY_LEFT]) {
-			move(gps::MOVE_LEFT, tankSpeed);
-		}
-		if (pressedKeys[GLFW_KEY_RIGHT]) {
-			move(gps::MOVE_RIGHT, tankSpeed);
-		}
-		move(gps::MOVE_BACKWARD, tankSpeed);
-	}
+	moveTankWithCollision();
 	
 	if (pressedKeys[GLFW_KEY_H]) {
 		lightsOn = 1;
@@ -440,6 +496,12 @@ void initModels()
 
 	farmer = gps::Model3D("objects/farmer/farmer.obj", "objects/farmer/");
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
+
+	tankBounds = farmer.GetBounds();
+	houseBounds = house.GetMeshBounds();
+	tentsBounds = tents.GetMeshBounds();
+	woodBounds = wood.GetMeshBounds();
+	rocketBounds = tank.GetMeshBounds();
 }
 
 void initShaders()

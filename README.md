@@ -42,6 +42,6 @@ cmake --build build --target run
 | B | Campfire light on / off |
 | H / J | Lamp (warm point light) on / off |
 | X | Toggle wireframe |
-| Arrow keys | Move the goat |
+| Arrow keys | Drive the tank (it collides with the buildings, wood pile and rocket) |
 | C | Launch the rocket |
 | Esc | Quit |
