@@ -817,6 +817,7 @@ void updateDayNight()
 	glUniform3fv(lightColorLoc, 1, glm::value_ptr(directColor));
 	glUniform3fv(ambientLightLoc, 1, glm::value_ptr(ambient));
 	glUniform3fv(fogColorLoc, 1, glm::value_ptr(fogColor));
+	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
 
 	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
 }

@@ -31,6 +31,8 @@ uniform float fireIntensity;
 
 #include "clouds.glsl"
 
+uniform float rainAmount; // 0..1: wet surfaces (darker, shinier) and thicker haze
+
 
 //fog
 uniform	vec3 startFog;
@@ -148,7 +150,7 @@ vec3 computeFireLight(vec3 albedo, vec3 specMap)
 
 float computeFog()
 {
- float fogDensity = 0.010f;
+ float fogDensity = 0.010f + 0.025f * rainAmount;
  float fragmentDistance = length(fragPosEye);
  float fogFactor = exp(-pow(fragmentDistance * fogDensity, 2));
 
@@ -171,8 +173,10 @@ void main()
 	diffuse *= cloudShade;
 	specular *= cloudShade;
 	
-	vec3 albedo = vec3(texture(diffuseTexture, fragTexCoords));
+	// Wet surfaces look darker and get a glossy sheen.
+	vec3 albedo = vec3(texture(diffuseTexture, fragTexCoords)) * (1.0f - 0.3f * rainAmount);
 	vec3 specMap = vec3(texture(specularTexture, fragTexCoords));
+	specMap = max(specMap, vec3(0.35f * rainAmount));
 
 	//modulate with diffuse map
 	ambient *= albedo;
@@ -185,10 +189,12 @@ void main()
 		+ computeFireLight(albedo, specMap), 1.0f);
     vec3 colorFinal = min(color, 1.0f);
 
-	if (startFog.x==1.0f){
+	// Fog when switched on (F), and rain haze while it rains.
+	float fogAmount = max(startFog.x, 0.85f * rainAmount);
+	if (fogAmount > 0.0f) {
 		float fogFactor = computeFog();
-		fColor = vec4(fogColor, 1.0f)*(1.0f-fogFactor)+vec4(colorFinal, 1.0f)*fogFactor;
-	}else{
+		fColor = vec4(mix(colorFinal, fogColor, (1.0f - fogFactor) * fogAmount), 1.0f);
+	} else {
 		fColor = vec4(colorFinal, 1.0f);
 	}
 }
