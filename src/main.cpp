@@ -25,6 +25,7 @@
 #include "Fireflies.hpp"
 #include "Snow.hpp"
 #include "Tornado.hpp"
+#include "Embers.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 
 #include "Model3D.hpp"
@@ -149,6 +150,11 @@ glm::vec3 ambientNow = glm::vec3(0.2f), directNow = glm::vec3(1.0f), fogColorNow
 gps::Tornado tornado;
 gps::Shader tornadoShader;
 gps::Shader tornadoDebrisShader;
+
+// The campfire's visible flames and sparks (see drawEmbers).
+gps::Embers embers;
+gps::Shader embersShader;
+const int EMBER_COUNT = 420;
 
 // Aurora borealis: only on clear nights over a fully snow-covered land (a cold, northern night).
 float auroraStrength = 0.0f;
@@ -689,6 +695,7 @@ void initModels()
 	snow.Init(SNOW_MAX_FLAKES);
 	sand.Init(SAND_MAX_GRAINS);
 	tornado.Init(64, 48, 3000);
+	embers.Init(EMBER_COUNT);
 	lightning.Init();
 	// The camp floor is around y = 0; the house, tents and wood pile lie within this box.
 	fireflies.Init(FIREFLY_COUNT, glm::vec3(-14.0f, 0.3f, -14.0f), glm::vec3(14.0f, 2.2f, 10.0f));
@@ -708,6 +715,7 @@ void initShaders()
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
 	snowShader.loadShader("shaders/snow.vert", "shaders/snow.frag");
 	tornadoShader.loadShader("shaders/tornado.vert", "shaders/tornado.frag");
+	embersShader.loadShader("shaders/embers.vert", "shaders/embers.frag");
 	tornadoDebrisShader.loadShader("shaders/tornadoDebris.vert", "shaders/tornadoDebris.frag");
 	lightningShader.loadShader("shaders/lightning.vert", "shaders/lightning.frag");
 	firefliesShader.loadShader("shaders/fireflies.vert", "shaders/fireflies.frag");
@@ -995,6 +1003,31 @@ void drawSand()
 	glUniform3fv(glGetUniformLocation(p, "rainColor"), 1, glm::value_ptr(grainColor));
 	glUniform1f(glGetUniformLocation(p, "rainAlpha"), 0.5f);
 	sand.Draw(rainShader, sandAmount);
+}
+
+// Flames and sparks over the campfire. They follow fireStrength (rain puts them out, B hides
+// them) and are swept sideways by the wind, much harder in a sandstorm or near a tornado.
+void drawEmbers()
+{
+	float strength = fireOn ? fireStrength : 0.0f;
+	if (strength <= 0.01f)
+		return;
+	glm::mat4 houseModel = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	glm::vec3 firePos = glm::vec3(houseModel * glm::vec4(FIRE_POS_MODEL - glm::vec3(0.0f, 0.47f, 0.0f), 1.0f)); // logs under the pot; the light floats above
+	float gusts = 0.2f + 1.6f * sandAmount + 1.2f * tornadoShake;
+	glm::vec3 wind = glm::vec3(WIND_VELOCITY.x, 0.0f, WIND_VELOCITY.y) * gusts;
+
+	GLuint p = embersShader.shaderProgram;
+	embersShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "firePos"), 1, glm::value_ptr(firePos));
+	glUniform3fv(glGetUniformLocation(p, "wind"), 1, glm::value_ptr(wind));
+	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform1f(glGetUniformLocation(p, "strength"), strength);
+	glUniform1f(glGetUniformLocation(p, "glow"), 0.55f + 0.45f * nightFactor);
+	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	embers.Draw(embersShader);
 }
 
 // The tornado funnel and the debris whirling around its foot.
@@ -1728,6 +1761,7 @@ void renderScene()
 	drawMoon();
 	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
 	drawTornado();
+	drawEmbers();
 	drawFireflies();
 	drawRain();
 	drawSnow();
