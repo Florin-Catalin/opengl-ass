@@ -248,6 +248,24 @@ gps::Model3D tank;
 
 gps::Model3D farmer;
 gps::Model3D wood;
+// "Dune Sandworm" by Wavebe (CC BY 4.0), converted with tools/glb2obj.py. Its OBJ coordinates
+// keep the original Sketchfab placement, so it is re-centred on its base here.
+gps::Model3D sandworm;
+const glm::vec3 SANDWORM_MODEL_BASE = glm::vec3(152.17f, -63.63f, 946.79f); // centre of its footprint, lowest point
+const glm::vec3 SANDWORM_POSITION = glm::vec3(0.0f, -0.5f, -58.0f); // in the valley beyond the camp; low enough that the
+                                                                     // model's own flat sand plate stays under the terrain
+const float SANDWORM_YAW_DEGREES = 0.0f;
+const float SANDWORM_SCALE = 1.5f; // ~50 units long, ~28 tall: it towers over the canyon rim
+
+// Placed in the world like the other static models: it turns with the scene (Q/E).
+glm::mat4 sandwormModelMatrix()
+{
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	m = glm::translate(m, SANDWORM_POSITION);
+	m = glm::rotate(m, glm::radians(SANDWORM_YAW_DEGREES), glm::vec3(0, 1, 0));
+	m = glm::scale(m, glm::vec3(SANDWORM_SCALE));
+	return glm::translate(m, -SANDWORM_MODEL_BASE);
+}
 gps::Shader myCustomShader;
 gps::Shader depthMapShader;
 
@@ -690,6 +708,7 @@ void initModels()
 
 	farmer = gps::Model3D("objects/farmer/farmer.obj", "objects/farmer/");
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
+	sandworm = gps::Model3D("objects/sandworm/sandworm.obj", "objects/sandworm/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	rain.Init(RAIN_MAX_DROPS);
 	snow.Init(SNOW_MAX_FLAKES);
@@ -1480,6 +1499,13 @@ void drawSceneObjects(bool withTerrain)
 	//send normal matrix data to shader
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	wood.Draw(myCustomShader);
+
+	// The sandworm, out in the valley beyond the camp.
+	model = sandwormModelMatrix();
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	sandworm.Draw(myCustomShader);
 }
 
 // Puddle reflections: the models drawn mirrored below the camp floor into reflectionFBO.
@@ -1665,6 +1691,10 @@ void renderScene()
 		GL_FALSE,
 		glm::value_ptr(model));
 	wood.Draw(depthMapShader);
+
+	model = sandwormModelMatrix();
+	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	sandworm.Draw(depthMapShader);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

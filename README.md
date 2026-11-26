@@ -1,6 +1,6 @@
 ![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
 # OpenGL-Application
-A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation, a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that reflect the camp and the sky, snow that settles on the ground and melts (with the northern lights on clear nights over full snow), sandstorms, a tornado, shooting stars, fireflies at night, a flickering campfire with flames and rising sparks, fog, a skybox and shadow mapping.
+A simple OpenGL 4.1 (core profile) scene for Linux: several OBJ models with translation (including a giant sandworm rising out of the desert beyond the canyon), a day/night cycle with a moving sun and a low-poly moon, twinkling stars and the naked-eye planets (Venus, Mars, Jupiter, Saturn), drifting clouds that cast shadows, rain with lightning (which puts out the campfire), a rainbow afterwards and puddles that reflect the camp and the sky, snow that settles on the ground and melts (with the northern lights on clear nights over full snow), sandstorms, a tornado, shooting stars, fireflies at night, a flickering campfire with flames and rising sparks, fog, a skybox and shadow mapping.
 
 ![Preview](UngureanuFlorin-Catalin_30434.png)
 
@@ -67,3 +67,4 @@ Embedded base color textures (PNG/JPEG) are extracted next to the OBJ. Materials
 ## Credits
 
 - "Low Poly Moon" by [FoxVenture](https://sketchfab.com/FoxVenture), [Sketchfab](https://sketchfab.com/3d-models/low-poly-moon-d671eb35d2244c8cb98d06b4948d9937), licensed [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). Converted to OBJ in `objects/moon/`.
+- "Dune Sandworm" by [Wavebe](https://sketchfab.com/Wavebe), [Sketchfab](https://sketchfab.com/3d-models/dune-sandworm-8d4fe90ed22f4e4293b8cdfeb4968c0f), licensed [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). Converted to OBJ in `objects/sandworm/`, scaled 1.5x and placed in the valley beyond the camp.
