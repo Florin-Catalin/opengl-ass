@@ -319,6 +319,27 @@ glm::mat4 roosterModelMatrix()
 	return glm::scale(m, glm::vec3(ROOSTER_SCALE));
 }
 
+// "Shenron (Dragon Ball)" by Anthony Yanez (CC BY 4.0), converted with tools/glb2obj.py without
+// the dragon balls at its feet. Its coils hover in the sky beyond the camp, under the clouds,
+// with the head turned towards the camp; it bobs and sways slowly. Not part of the shadow pass
+// (it is far outside the shadow map) or collision.
+gps::Model3D dragon;
+const glm::vec3 DRAGON_MODEL_BASE = glm::vec3(33.0f, 5.8f, 195.0f); // centre of the coils, lowest point
+const glm::vec3 DRAGON_POSITION = glm::vec3(-30.0f, 38.0f, -75.0f);
+const float DRAGON_YAW_DEGREES = 20.0f; // head towards the camp
+const float DRAGON_SCALE = 0.07f;       // about 57 units tall
+
+glm::mat4 dragonModelMatrix()
+{
+	float t = (float)glfwGetTime();
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	m = glm::translate(m, DRAGON_POSITION + glm::vec3(0.0f, 2.5f * sinf(t * 0.4f), 0.0f));
+	m = glm::rotate(m, glm::radians(DRAGON_YAW_DEGREES + 8.0f * sinf(t * 0.15f)), glm::vec3(0, 1, 0));
+	m = glm::rotate(m, glm::radians(3.0f * sinf(t * 0.27f)), glm::vec3(0, 0, 1)); // a slight roll
+	m = glm::scale(m, glm::vec3(DRAGON_SCALE));
+	return glm::translate(m, -DRAGON_MODEL_BASE);
+}
+
 // Placed in the world like the other static models: it turns with the scene (Q/E).
 glm::mat4 sandwormModelMatrix()
 {
@@ -878,6 +899,7 @@ void initModels()
 	sandworm = gps::Model3D("objects/sandworm/sandworm.obj", "objects/sandworm/");
 	camel = gps::Model3D("objects/camel/camel.obj", "objects/camel/");
 	rooster = gps::Model3D("objects/rooster/rooster.obj", "objects/rooster/");
+	dragon = gps::Model3D("objects/dragon/dragon.obj", "objects/dragon/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	blackholeHole = gps::Model3D("objects/blackhole/blackhole_hole.obj", "objects/blackhole/");
 	blackholeDisc = gps::Model3D("objects/blackhole/blackhole_disc.obj", "objects/blackhole/");
@@ -1737,6 +1759,13 @@ void drawSceneObjects(bool withTerrain)
 	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	rooster.Draw(myCustomShader);
+
+	// The dragon in the sky beyond the camp.
+	model = dragonModelMatrix();
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	dragon.Draw(myCustomShader);
 }
 
 // Puddle reflections: the models drawn mirrored below the camp floor into reflectionFBO.

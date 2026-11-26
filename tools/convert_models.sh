@@ -12,6 +12,16 @@ python3 -I tools/glb2obj.py objects/camel/pink_camel.glb objects/camel camel
 # Rooster: one textured mesh.
 python3 -I tools/glb2obj.py objects/rooster/cock_chicken_gun.glb objects/rooster rooster
 
+# Dragon: flies in the sky, so the seven dragon balls lying at its feet are left out.
+python3 -I tools/glb2obj.py objects/dragon/shenron_dragon_ball.glb objects/dragon dragon \
+	--skip "One Star_02 - Default_0" --skip "One Star_03 - Default_0" \
+	--skip "Two Star_02 - Default_0" --skip "Two Star_03 - Default_0" \
+	--skip "Star Three_02 - Default_0" --skip "Star Three_03 - Default_0" \
+	--skip "Four Star_02 - Default_0" --skip "Four Star_03 - Default_0" \
+	--skip "Five Star_02 - Default_0" --skip "Five Star_03 - Default_0" \
+	--skip "Six Star_02 - Default_0" --skip "Six Star_03 - Default_0" \
+	--skip "Seven Star_02 - Default_0" --skip "Seven Star_03 - Default_0"
+
 # Black hole: the flat accretion disc keeps its glowing (emissive) texture; everything else
 # (the core and the shells around it) is drawn solid black, so it needs no textures.
 BH=objects/blackhole/blackhole.glb

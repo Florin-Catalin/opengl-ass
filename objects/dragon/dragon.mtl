@@ -1,0 +1,28 @@
+newmtl Green
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd dragon_mat0.jpg
+
+newmtl Yellow
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd dragon_mat0.jpg
+
+newmtl 09_-_Default
+Ka 0 0 0
+Kd 0.3774 0.3774 0.3774
+Ks 0 0 0
+Ns 1
+map_Kd dragon_mat0.jpg
+
+newmtl 08_-_Default
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd dragon_mat0.jpg
+
