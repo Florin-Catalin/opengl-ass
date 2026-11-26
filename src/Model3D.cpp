@@ -27,7 +27,7 @@ namespace gps {
 	}
 
 	// Draw each mesh from the model
-	void Model3D::Draw(gps::Shader shaderProgram)
+	void Model3D::Draw(gps::Shader& shaderProgram)
 	{
 		for (int i = 0; i < meshes.size(); i++)
 			meshes[i].Draw(shaderProgram);

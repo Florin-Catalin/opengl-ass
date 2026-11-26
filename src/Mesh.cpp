@@ -20,7 +20,7 @@ namespace gps {
 	}
 
 	/* Mesh drawing function - also applies associated textures */
-	void Mesh::Draw(gps::Shader shader)
+	void Mesh::Draw(gps::Shader& shader)
 	{
 		shader.useShaderProgram();
 

@@ -49,7 +49,7 @@ public:
 
 	Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices, std::vector<Texture> textures);
 
-	void Draw(gps::Shader shader);
+	void Draw(gps::Shader& shader);
 
 private:
     /*  Render data  */

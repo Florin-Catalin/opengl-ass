@@ -22,7 +22,7 @@ namespace gps {
     public:
         SkyBox();
         void Load(std::vector<const GLchar*> cubeMapFaces);
-        void Draw(gps::Shader shader, glm::mat4 viewMatrix, glm::mat4 projectionMatrix);
+        void Draw(gps::Shader& shader, const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix);
         GLuint GetTextureId();
     private:
         GLuint skyboxVAO;

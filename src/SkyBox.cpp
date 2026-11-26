@@ -21,7 +21,7 @@ namespace gps {
         InitSkyBox();
     }
     
-    void SkyBox::Draw(gps::Shader shader, glm::mat4 viewMatrix, glm::mat4 projectionMatrix)
+    void SkyBox::Draw(gps::Shader& shader, const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
     {
         shader.useShaderProgram();
         

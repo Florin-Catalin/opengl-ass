@@ -31,7 +31,7 @@ namespace gps {
 
 		Model3D(std::string fileName, std::string basePath);
 
-		void Draw(gps::Shader shaderProgram);
+		void Draw(gps::Shader& shaderProgram);
 
 		// Model-space bounds of each component mesh (one per OBJ shape).
 		std::vector<gps::Bounds> GetMeshBounds() const;
