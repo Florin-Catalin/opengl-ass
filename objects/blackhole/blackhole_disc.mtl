@@ -1,0 +1,7 @@
+newmtl Blackhole_ring
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd blackhole_disc_mat1.jpg
+

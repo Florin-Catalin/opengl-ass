@@ -189,6 +189,18 @@ GLuint fogColorLoc;
 
 // Moon model drawn in the sky at night (objects/moon, converted from low_poly_moon.glb).
 gps::Model3D moon;
+
+// A black hole hanging in the sky: "Blackhole" by rubykamen (CC BY 4.0), converted with
+// tools/glb2obj.py into the hole (core and shells, drawn solid black) and the accretion disc
+// (with its glowing texture). Like the moon it is drawn around the camera, so it can never be
+// reached, after the skybox.
+gps::Model3D blackholeHole;
+gps::Model3D blackholeDisc;
+gps::Shader blackholeShader;
+const glm::vec3 BLACKHOLE_DIR = glm::normalize(glm::vec3(0.45f, 0.5f, -0.75f)); // high over the valley beyond the camp
+const float BLACKHOLE_DISTANCE = 350.0f; // beyond the moon (300), so the moon passes in front of it
+const float BLACKHOLE_SCALE = 20.0f;     // disc radius ~60 units: about 10 degrees across the sky
+const float BLACKHOLE_TILT_DEGREES = 18.0f; // the disc is seen almost edge-on
 gps::Shader moonShader;
 glm::vec3 sunSkyDir = glm::vec3(0.0f, 1.0f, 0.0f);  // unit direction towards the sun
 glm::vec3 moonSkyDir = glm::vec3(0.0f, -1.0f, 0.0f); // unit direction towards the moon
@@ -710,6 +722,8 @@ void initModels()
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	sandworm = gps::Model3D("objects/sandworm/sandworm.obj", "objects/sandworm/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
+	blackholeHole = gps::Model3D("objects/blackhole/blackhole_hole.obj", "objects/blackhole/");
+	blackholeDisc = gps::Model3D("objects/blackhole/blackhole_disc.obj", "objects/blackhole/");
 	rain.Init(RAIN_MAX_DROPS);
 	snow.Init(SNOW_MAX_FLAKES);
 	sand.Init(SAND_MAX_GRAINS);
@@ -731,6 +745,7 @@ void initShaders()
 	myCustomShader.loadShader("shaders/shaderStart.vert", "shaders/shaderStart.frag");
 	depthMapShader.loadShader("shaders/simpleDepthMap.vert", "shaders/simpleDepthMap.frag");
 	moonShader.loadShader("shaders/moon.vert", "shaders/moon.frag");
+	blackholeShader.loadShader("shaders/moon.vert", "shaders/blackhole.frag");
 	rainShader.loadShader("shaders/rain.vert", "shaders/rain.frag");
 	snowShader.loadShader("shaders/snow.vert", "shaders/snow.frag");
 	tornadoShader.loadShader("shaders/tornado.vert", "shaders/tornado.frag");
@@ -794,6 +809,50 @@ bool invisibilistyt = false;
 
 // Draws the moon far away along moonSkyDir, centred on the camera so it doesn't move as you walk.
 // Drawn after the skybox with alpha blending, faded by nightFactor.
+// The black hole: its disc faces the camera at a shallow angle and turns slowly. The hole is drawn
+// first, solid black (blended over the sky so clouds can pass in front of it); then the disc's glow
+// is added, with the hole hiding the part of the disc behind it.
+void drawBlackhole()
+{
+	float visibility = 1.0f - overcast;
+	if (visibility < 0.01f)
+		return;
+	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
+	glm::vec3 toCamera = -BLACKHOLE_DIR;
+	glm::vec3 right = glm::normalize(glm::cross(toCamera, glm::vec3(0.0f, 1.0f, 0.0f)));
+	glm::vec3 up = glm::cross(right, toCamera);
+	float tilt = glm::radians(BLACKHOLE_TILT_DEGREES);
+	glm::vec3 normal = glm::normalize(toCamera * sinf(tilt) + up * cosf(tilt)); // the disc's axis
+	glm::vec3 side = glm::normalize(glm::cross(right, normal));
+	glm::mat4 basis = glm::mat4(glm::vec4(right, 0.0f), glm::vec4(normal, 0.0f), glm::vec4(side, 0.0f), glm::vec4(0, 0, 0, 1));
+
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), cameraPos + BLACKHOLE_DIR * BLACKHOLE_DISTANCE) * basis;
+	m = glm::rotate(m, (float)glfwGetTime() * 0.12f, glm::vec3(0.0f, 1.0f, 0.0f)); // the disc swirls
+	m = glm::scale(m, glm::vec3(BLACKHOLE_SCALE));
+
+	GLuint p = blackholeShader.shaderProgram;
+	blackholeShader.useShaderProgram();
+	glUniformMatrix4fv(glGetUniformLocation(p, "model"), 1, GL_FALSE, glm::value_ptr(m));
+	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(glGetUniformLocation(p, "visibility"), visibility);
+	glUniform1f(glGetUniformLocation(p, "glowStrength"), 0.75f + 0.5f * nightFactor);
+	setCloudUniforms(p);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glUniform1f(glGetUniformLocation(p, "discPass"), 0.0f);
+	blackholeHole.Draw(blackholeShader);
+
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	glDepthMask(GL_FALSE);
+	glUniform1f(glGetUniformLocation(p, "discPass"), 1.0f);
+	blackholeDisc.Draw(blackholeShader);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+}
+
 void drawMoon()
 {
 	float alpha = glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f) * (1.0f - sandAmount); // lost in the dust
@@ -1788,6 +1847,7 @@ void renderScene()
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
 	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
+	drawBlackhole();
 	drawMoon();
 	lightning.Draw(lightningShader, view, projection, glm::vec3(glm::inverse(view)[3]), glfwGetTime());
 	drawTornado();

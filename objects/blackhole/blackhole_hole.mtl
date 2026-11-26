@@ -1,0 +1,28 @@
+newmtl Blackhole_core
+Ka 0 0 0
+Kd 0.0000 0.0000 0.0000
+Ks 0 0 0
+Ns 1
+map_Kd blackhole_hole_mat0.png
+
+newmtl Blackhole_skin
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd blackhole_hole_mat2.png
+
+newmtl Blackhole_skin_inner
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd blackhole_hole_mat3.png
+
+newmtl Blackhole_ring2
+Ka 0 0 0
+Kd 1.0000 1.0000 1.0000
+Ks 0 0 0
+Ns 1
+map_Kd blackhole_hole_mat4.png
+
