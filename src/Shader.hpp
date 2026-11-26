@@ -16,8 +16,13 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 namespace gps {
+
+// glGetUniformLocation with a cache: each (program, name) pair is looked up in GL only once.
+// The scene sets most uniforms every frame, so this saves a GL string lookup per uniform per frame.
+GLint uniformLocation(GLuint program, const std::string& name);
 
 class Shader
 {

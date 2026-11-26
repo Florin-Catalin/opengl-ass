@@ -37,7 +37,7 @@ namespace gps {
             return;
 
         shader.useShaderProgram();
-        glUniform1f(glGetUniformLocation(shader.shaderProgram, "visibility"), visibility);
+        glUniform1f(gps::uniformLocation(shader.shaderProgram, "visibility"), visibility);
 
         glEnable(GL_PROGRAM_POINT_SIZE);
         glEnable(GL_BLEND);

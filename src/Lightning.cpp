@@ -125,9 +125,9 @@ namespace gps {
         }
 
         shader.useShaderProgram();
-        glUniformMatrix4fv(glGetUniformLocation(shader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(shader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-        glUniform1f(glGetUniformLocation(shader.shaderProgram, "boltBrightness"), brightness);
+        glUniformMatrix4fv(gps::uniformLocation(shader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(gps::uniformLocation(shader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform1f(gps::uniformLocation(shader.shaderProgram, "boltBrightness"), brightness);
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);

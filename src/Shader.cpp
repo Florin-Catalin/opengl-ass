@@ -9,6 +9,19 @@
 #include "Shader.hpp"
 
 namespace gps {
+    static std::unordered_map<GLuint, std::unordered_map<std::string, GLint> > uniformCache;
+
+    GLint uniformLocation(GLuint program, const std::string& name)
+    {
+        std::unordered_map<std::string, GLint>& locations = uniformCache[program];
+        std::unordered_map<std::string, GLint>::iterator it = locations.find(name);
+        if (it != locations.end())
+            return it->second;
+        GLint location = glGetUniformLocation(program, name.c_str());
+        locations[name] = location;
+        return location;
+    }
+
     std::string Shader::readShaderFile(std::string fileName)
     {
         std::ifstream shaderFile;
@@ -97,6 +110,7 @@ namespace gps {
 
         //attach and link the shader programs
         this->shaderProgram = glCreateProgram();
+        uniformCache.erase(this->shaderProgram); // in case GL reuses the id of a deleted program
         glAttachShader(this->shaderProgram, vertexShader);
         glAttachShader(this->shaderProgram, fragmentShader);
         glLinkProgram(this->shaderProgram);

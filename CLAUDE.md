@@ -25,7 +25,7 @@ Helper classes are in the `gps` namespace:
 - `Camera`: free-fly camera driven by `move()` and `mouse_callback()`.
 - `SkyBox`: cubemap loaded from `textures/skybox/sahara_*.tga`, drawn with `skyboxShader`.
 
-Rendering is two-pass shadow mapping. The depth pass uses `simpleDepthMap` and writes into `shadowMapFBO`/`depthMapTexture`. The main pass uses `shaderStart`, which does lighting, shadows and fog. The skybox is drawn after the opaque scene. Uniform locations are cached in globals (`modelLoc`, `lightDirLoc`, `fogLoc`, …) in `initUniforms`. A new uniform needs a global location, a lookup in `initUniforms`, and a use in the shader.
+Rendering is two-pass shadow mapping. The depth pass uses `simpleDepthMap` and writes into `shadowMapFBO`/`depthMapTexture`. The main pass uses `shaderStart`, which does lighting, shadows and fog. The skybox is drawn after the opaque scene. Uniform locations are cached in globals (`modelLoc`, `lightDirLoc`, `fogLoc`, …) in `initUniforms`. A new uniform needs a global location, a lookup in `initUniforms`, and a use in the shader. Elsewhere, look up uniforms with `gps::uniformLocation(program, name)` (`Shader.hpp`), not `glGetUniformLocation`: it caches each location, so per-frame code can call it freely. Pass `gps::Shader` by reference.
 
 Vertex attribute locations are fixed (0 position, 1 normal, 2 texcoords) in `Mesh.cpp`/`SkyBox.cpp`, and each vertex shader declares matching `layout(location=N)`. All shaders start with `#version 410 core`.
 

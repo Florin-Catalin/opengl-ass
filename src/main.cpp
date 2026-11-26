@@ -407,7 +407,7 @@ void windowResizeCallback(GLFWwindow* window, int width, int height)
 	//set projection matrix
 	glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)retina_width / (float)retina_height, 0.1f, 1000.0f);
 	//send matrix data to shader
-	GLint projLoc = glGetUniformLocation(myCustomShader.shaderProgram, "projection");
+	GLint projLoc = gps::uniformLocation(myCustomShader.shaderProgram, "projection");
 	glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
 	//set Viewport transform
@@ -939,44 +939,44 @@ void initUniforms()
 {
 	myCustomShader.useShaderProgram();
 
-	modelLoc = glGetUniformLocation(myCustomShader.shaderProgram, "model");
+	modelLoc = gps::uniformLocation(myCustomShader.shaderProgram, "model");
 
-	viewLoc = glGetUniformLocation(myCustomShader.shaderProgram, "view");
+	viewLoc = gps::uniformLocation(myCustomShader.shaderProgram, "view");
 
-	normalMatrixLoc = glGetUniformLocation(myCustomShader.shaderProgram, "normalMatrix");
+	normalMatrixLoc = gps::uniformLocation(myCustomShader.shaderProgram, "normalMatrix");
 
-	lightDirMatrixLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightDirMatrix");
+	lightDirMatrixLoc = gps::uniformLocation(myCustomShader.shaderProgram, "lightDirMatrix");
 
 	projection = glm::perspective(glm::radians(45.0f), (float)retina_width / (float)retina_height, 0.1f, 1000.0f);
-	projectionLoc = glGetUniformLocation(myCustomShader.shaderProgram, "projection");
+	projectionLoc = gps::uniformLocation(myCustomShader.shaderProgram, "projection");
 	glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
 	//set the light direction (direction towards the light)
 	lightDir = glm::vec3(0.0f, 1.0f, 2.0f);
-	lightDirLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightDir");
+	lightDirLoc = gps::uniformLocation(myCustomShader.shaderProgram, "lightDir");
 	glUniform3fv(lightDirLoc, 1, glm::value_ptr(lightDir));
 
 	//set light color
 	lightColor = glm::vec3(1.0f, 1.0f, 1.0f); //white light
-	lightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightColor");
+	lightColorLoc = gps::uniformLocation(myCustomShader.shaderProgram, "lightColor");
 	glUniform3fv(lightColorLoc, 1, glm::value_ptr(lightColor));
 
 	//set point light
 	posLightPos = glm::vec3(1.0f,5.0f,1.0f);
-	posLightPosLoc = glGetUniformLocation(myCustomShader.shaderProgram, "posLightPos");
+	posLightPosLoc = gps::uniformLocation(myCustomShader.shaderProgram, "posLightPos");
 	glUniform3fv(posLightPosLoc, 1, glm::value_ptr(posLightPos));
 
-	fogLoc = glGetUniformLocation(myCustomShader.shaderProgram, "startFog");
-	fogColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fogColor");
-	ambientLightLoc = glGetUniformLocation(myCustomShader.shaderProgram, "ambientLight");
-	lightsOnLoc = glGetUniformLocation(myCustomShader.shaderProgram, "lightsOn");
-	fireLightPosEyeLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireLightPosEye");
-	fireColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireColor");
-	fireIntensityLoc = glGetUniformLocation(myCustomShader.shaderProgram, "fireIntensity");
+	fogLoc = gps::uniformLocation(myCustomShader.shaderProgram, "startFog");
+	fogColorLoc = gps::uniformLocation(myCustomShader.shaderProgram, "fogColor");
+	ambientLightLoc = gps::uniformLocation(myCustomShader.shaderProgram, "ambientLight");
+	lightsOnLoc = gps::uniformLocation(myCustomShader.shaderProgram, "lightsOn");
+	fireLightPosEyeLoc = gps::uniformLocation(myCustomShader.shaderProgram, "fireLightPosEye");
+	fireColorLoc = gps::uniformLocation(myCustomShader.shaderProgram, "fireColor");
+	fireIntensityLoc = gps::uniformLocation(myCustomShader.shaderProgram, "fireIntensity");
 	// samplerCube must not default to unit 0, where a 2D texture is bound.
-	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "skyboxCube"), SKYBOX_TEXTURE_UNIT);
-	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "reflectionMap"), REFLECTION_TEXTURE_UNIT);
-	pointLightColorLoc = glGetUniformLocation(myCustomShader.shaderProgram, "pointLightColor");
+	glUniform1i(gps::uniformLocation(myCustomShader.shaderProgram, "skyboxCube"), SKYBOX_TEXTURE_UNIT);
+	glUniform1i(gps::uniformLocation(myCustomShader.shaderProgram, "reflectionMap"), REFLECTION_TEXTURE_UNIT);
+	pointLightColorLoc = gps::uniformLocation(myCustomShader.shaderProgram, "pointLightColor");
 	glUniform3fv(pointLightColorLoc, 1, glm::value_ptr(glm::vec3(1.0f, 0.8f, 0.5f))); // warm lamp
 
 
@@ -1012,22 +1012,22 @@ void drawBlackhole()
 
 	GLuint p = blackholeShader.shaderProgram;
 	blackholeShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "model"), 1, GL_FALSE, glm::value_ptr(m));
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform1f(glGetUniformLocation(p, "visibility"), visibility);
-	glUniform1f(glGetUniformLocation(p, "glowStrength"), 0.75f + 0.5f * nightFactor);
+	glUniformMatrix4fv(gps::uniformLocation(p, "model"), 1, GL_FALSE, glm::value_ptr(m));
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(gps::uniformLocation(p, "visibility"), visibility);
+	glUniform1f(gps::uniformLocation(p, "glowStrength"), 0.75f + 0.5f * nightFactor);
 	setCloudUniforms(p);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glUniform1f(glGetUniformLocation(p, "discPass"), 0.0f);
+	glUniform1f(gps::uniformLocation(p, "discPass"), 0.0f);
 	blackholeHole.Draw(blackholeShader);
 
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	glDepthMask(GL_FALSE);
-	glUniform1f(glGetUniformLocation(p, "discPass"), 1.0f);
+	glUniform1f(gps::uniformLocation(p, "discPass"), 1.0f);
 	blackholeDisc.Draw(blackholeShader);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
@@ -1046,12 +1046,12 @@ void drawMoon()
 	m = glm::translate(m, -MOON_MODEL_CENTER);
 
 	moonShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(m));
-	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(moonShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(moonShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
-	glUniform1f(glGetUniformLocation(moonShader.shaderProgram, "moonAlpha"), alpha);
-	glUniform3fv(glGetUniformLocation(moonShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniformMatrix4fv(gps::uniformLocation(moonShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(m));
+	glUniformMatrix4fv(gps::uniformLocation(moonShader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(moonShader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(moonShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
+	glUniform1f(gps::uniformLocation(moonShader.shaderProgram, "moonAlpha"), alpha);
+	glUniform3fv(gps::uniformLocation(moonShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
 	setCloudUniforms(moonShader.shaderProgram);
 
 	glEnable(GL_BLEND);
@@ -1158,11 +1158,11 @@ void updateMeteors(GLuint program, float visibility)
 		tangents[i] = m.tangent;
 		states[i] = glm::vec4(m.arc * t, glm::min(m.tail, m.arc * t + 0.01f), m.brightness * envelope * visibility, m.fireball);
 	}
-	glUniform1i(glGetUniformLocation(program, "meteorCount"), n);
+	glUniform1i(gps::uniformLocation(program, "meteorCount"), n);
 	if (n > 0) {
-		glUniform3fv(glGetUniformLocation(program, "meteorStart"), n, glm::value_ptr(starts[0]));
-		glUniform3fv(glGetUniformLocation(program, "meteorTangent"), n, glm::value_ptr(tangents[0]));
-		glUniform4fv(glGetUniformLocation(program, "meteorState"), n, glm::value_ptr(states[0]));
+		glUniform3fv(gps::uniformLocation(program, "meteorStart"), n, glm::value_ptr(starts[0]));
+		glUniform3fv(gps::uniformLocation(program, "meteorTangent"), n, glm::value_ptr(tangents[0]));
+		glUniform4fv(gps::uniformLocation(program, "meteorState"), n, glm::value_ptr(states[0]));
 	}
 }
 
@@ -1200,23 +1200,23 @@ void uploadPuddleUniforms()
 {
 	GLuint p = myCustomShader.shaderProgram;
 	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
-	glUniform1f(glGetUniformLocation(p, "puddleWetness"), puddleWetness);
-	glUniform1f(glGetUniformLocation(p, "puddleSurface"), 0.0f);
-	glUniform3fv(glGetUniformLocation(p, "skyTint"), 1, glm::value_ptr(skyColor));
-	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform3fv(glGetUniformLocation(p, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
-	glUniform1f(glGetUniformLocation(p, "moonVisibility"), glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
-	glUniform3fv(glGetUniformLocation(p, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
-	glUniform3fv(glGetUniformLocation(p, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform1f(gps::uniformLocation(p, "puddleWetness"), puddleWetness);
+	glUniform1f(gps::uniformLocation(p, "puddleSurface"), 0.0f);
+	glUniform3fv(gps::uniformLocation(p, "skyTint"), 1, glm::value_ptr(skyColor));
+	glUniform3fv(gps::uniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(gps::uniformLocation(p, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
+	glUniform1f(gps::uniformLocation(p, "moonVisibility"), glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
+	glUniform3fv(gps::uniformLocation(p, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
+	glUniform3fv(gps::uniformLocation(p, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
 	glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_UNIT);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, mySkyBox.GetTextureId());
 	glActiveTexture(GL_TEXTURE0 + REFLECTION_TEXTURE_UNIT);
 	glBindTexture(GL_TEXTURE_2D, reflectionTexture);
 	glActiveTexture(GL_TEXTURE0);
-	glUniform1f(glGetUniformLocation(p, "puddlePlaneY"), PUDDLE_PLANE_Y);
-	glUniform2f(glGetUniformLocation(p, "screenSize"), (float)retina_width, (float)retina_height);
-	glUniform1f(glGetUniformLocation(p, "hasReflection"), puddleWetness > 0.0f ? 1.0f : 0.0f);
+	glUniform1f(gps::uniformLocation(p, "puddlePlaneY"), PUDDLE_PLANE_Y);
+	glUniform2f(gps::uniformLocation(p, "screenSize"), (float)retina_width, (float)retina_height);
+	glUniform1f(gps::uniformLocation(p, "hasReflection"), puddleWetness > 0.0f ? 1.0f : 0.0f);
 }
 
 // Snowflakes drift down around the camera, lit by the current light.
@@ -1229,14 +1229,14 @@ void drawSnow()
 
 	GLuint p = snowShader.shaderProgram;
 	snowShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
-	glUniform3fv(glGetUniformLocation(p, "snowVelocity"), 1, glm::value_ptr(velocity));
-	glUniform3fv(glGetUniformLocation(p, "snowBoxSize"), 1, glm::value_ptr(glm::vec3(36.0f, 24.0f, 36.0f)));
-	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
-	glUniform3fv(glGetUniformLocation(p, "snowColor"), 1, glm::value_ptr(snowColor));
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(gps::uniformLocation(p, "snowVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(gps::uniformLocation(p, "snowBoxSize"), 1, glm::value_ptr(glm::vec3(36.0f, 24.0f, 36.0f)));
+	glUniform1f(gps::uniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniform3fv(gps::uniformLocation(p, "snowColor"), 1, glm::value_ptr(snowColor));
 	snow.Draw(snowShader, snowAmount);
 }
 
@@ -1250,16 +1250,16 @@ void drawSand()
 
 	GLuint p = rainShader.shaderProgram;
 	rainShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
-	glUniform3fv(glGetUniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
-	glUniform3fv(glGetUniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(30.0f, 14.0f, 30.0f)));
-	glUniform1f(glGetUniformLocation(p, "streakLength"), 0.35f);
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(gps::uniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(gps::uniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(30.0f, 14.0f, 30.0f)));
+	glUniform1f(gps::uniformLocation(p, "streakLength"), 0.35f);
 	glm::vec3 grainColor = dustColor * 0.6f; // grains are darker than the glowing dust around them
-	glUniform3fv(glGetUniformLocation(p, "rainColor"), 1, glm::value_ptr(grainColor));
-	glUniform1f(glGetUniformLocation(p, "rainAlpha"), 0.5f);
+	glUniform3fv(gps::uniformLocation(p, "rainColor"), 1, glm::value_ptr(grainColor));
+	glUniform1f(gps::uniformLocation(p, "rainAlpha"), 0.5f);
 	sand.Draw(rainShader, sandAmount);
 }
 
@@ -1277,14 +1277,14 @@ void drawEmbers()
 
 	GLuint p = embersShader.shaderProgram;
 	embersShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "firePos"), 1, glm::value_ptr(firePos));
-	glUniform3fv(glGetUniformLocation(p, "wind"), 1, glm::value_ptr(wind));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
-	glUniform1f(glGetUniformLocation(p, "strength"), strength);
-	glUniform1f(glGetUniformLocation(p, "glow"), 0.55f + 0.45f * nightFactor);
-	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "firePos"), 1, glm::value_ptr(firePos));
+	glUniform3fv(gps::uniformLocation(p, "wind"), 1, glm::value_ptr(wind));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform1f(gps::uniformLocation(p, "strength"), strength);
+	glUniform1f(gps::uniformLocation(p, "glow"), 0.55f + 0.45f * nightFactor);
+	glUniform1f(gps::uniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
 	embers.Draw(embersShader);
 }
 
@@ -1303,34 +1303,34 @@ void drawTornado()
 	for (int i = 0; i < 2; i++) {
 		GLuint p = shaders[i]->shaderProgram;
 		shaders[i]->useShaderProgram();
-		glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-		glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-		glUniform3fv(glGetUniformLocation(p, "tornadoBase"), 1, glm::value_ptr(tornadoBase));
-		glUniform1f(glGetUniformLocation(p, "funnelHeight"), TORNADO_FUNNEL_HEIGHT);
-		glUniform1f(glGetUniformLocation(p, "tornadoTime"), t);
-		glUniform1f(glGetUniformLocation(p, "tornadoWidth"), width);
-		glUniform1f(glGetUniformLocation(p, "visibility"), glm::smoothstep(0.0f, 0.3f, tornadoAmount));
+		glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniform3fv(gps::uniformLocation(p, "tornadoBase"), 1, glm::value_ptr(tornadoBase));
+		glUniform1f(gps::uniformLocation(p, "funnelHeight"), TORNADO_FUNNEL_HEIGHT);
+		glUniform1f(gps::uniformLocation(p, "tornadoTime"), t);
+		glUniform1f(gps::uniformLocation(p, "tornadoWidth"), width);
+		glUniform1f(gps::uniformLocation(p, "visibility"), glm::smoothstep(0.0f, 0.3f, tornadoAmount));
 	}
 
 	GLuint f = tornadoShader.shaderProgram;
 	tornadoShader.useShaderProgram();
-	glUniform3fv(glGetUniformLocation(f, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform3fv(glGetUniformLocation(f, "lightDirWorld"), 1, glm::value_ptr(glm::normalize(currentLightDir)));
-	glUniform3fv(glGetUniformLocation(f, "lightColor"), 1, glm::value_ptr(directNow));
-	glUniform3fv(glGetUniformLocation(f, "ambientLight"), 1, glm::value_ptr(ambientNow));
-	glUniform3fv(glGetUniformLocation(f, "fogColor"), 1, glm::value_ptr(fogColorNow));
-	glUniform1f(glGetUniformLocation(f, "extent"), extent);
-	glUniform1f(glGetUniformLocation(f, "shellScale"), 1.0f);
+	glUniform3fv(gps::uniformLocation(f, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(gps::uniformLocation(f, "lightDirWorld"), 1, glm::value_ptr(glm::normalize(currentLightDir)));
+	glUniform3fv(gps::uniformLocation(f, "lightColor"), 1, glm::value_ptr(directNow));
+	glUniform3fv(gps::uniformLocation(f, "ambientLight"), 1, glm::value_ptr(ambientNow));
+	glUniform3fv(gps::uniformLocation(f, "fogColor"), 1, glm::value_ptr(fogColorNow));
+	glUniform1f(gps::uniformLocation(f, "extent"), extent);
+	glUniform1f(gps::uniformLocation(f, "shellScale"), 1.0f);
 	tornado.DrawFunnel(tornadoShader);
-	glUniform1f(glGetUniformLocation(f, "shellScale"), 1.45f);
+	glUniform1f(gps::uniformLocation(f, "shellScale"), 1.45f);
 	tornado.DrawFunnel(tornadoShader);
 
 	GLuint d = tornadoDebrisShader.shaderProgram;
 	tornadoDebrisShader.useShaderProgram();
-	glUniform1f(glGetUniformLocation(d, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
-	glUniform3fv(glGetUniformLocation(d, "dustLight"), 1, glm::value_ptr(glm::min(dustLight, glm::vec3(1.2f))));
+	glUniform1f(gps::uniformLocation(d, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniform3fv(gps::uniformLocation(d, "dustLight"), 1, glm::value_ptr(glm::min(dustLight, glm::vec3(1.2f))));
 	// Debris only once the funnel has reached the ground.
-	glUniform1f(glGetUniformLocation(d, "visibility"), glm::smoothstep(0.6f, 0.9f, tornadoAmount));
+	glUniform1f(gps::uniformLocation(d, "visibility"), glm::smoothstep(0.6f, 0.9f, tornadoAmount));
 	tornado.DrawDebris(tornadoDebrisShader);
 }
 
@@ -1342,12 +1342,12 @@ void drawFireflies()
 		return;
 	GLuint p = firefliesShader.shaderProgram;
 	firefliesShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "areaMin"), 1, glm::value_ptr(fireflies.AreaMin()));
-	glUniform3fv(glGetUniformLocation(p, "areaSize"), 1, glm::value_ptr(fireflies.AreaSize()));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
-	glUniform1f(glGetUniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "areaMin"), 1, glm::value_ptr(fireflies.AreaMin()));
+	glUniform3fv(gps::uniformLocation(p, "areaSize"), 1, glm::value_ptr(fireflies.AreaSize()));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform1f(gps::uniformLocation(p, "pixelsPerUnitAtOne"), projection[1][1] * 0.5f * (float)retina_height);
 	fireflies.Draw(firefliesShader, visibility);
 }
 
@@ -1370,24 +1370,24 @@ void drawRain()
 
 	GLuint p = rainShader.shaderProgram;
 	rainShader.useShaderProgram();
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-	glUniform3fv(glGetUniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform1f(glGetUniformLocation(p, "time"), (float)glfwGetTime());
-	glUniform3fv(glGetUniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
-	glUniform3fv(glGetUniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(40.0f, 30.0f, 40.0f)));
-	glUniform1f(glGetUniformLocation(p, "streakLength"), 0.6f);
-	glUniform3fv(glGetUniformLocation(p, "rainColor"), 1, glm::value_ptr(rainColor));
-	glUniform1f(glGetUniformLocation(p, "rainAlpha"), 0.35f);
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	glUniform3fv(gps::uniformLocation(p, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform1f(gps::uniformLocation(p, "time"), (float)glfwGetTime());
+	glUniform3fv(gps::uniformLocation(p, "rainVelocity"), 1, glm::value_ptr(velocity));
+	glUniform3fv(gps::uniformLocation(p, "rainBoxSize"), 1, glm::value_ptr(glm::vec3(40.0f, 30.0f, 40.0f)));
+	glUniform1f(gps::uniformLocation(p, "streakLength"), 0.6f);
+	glUniform3fv(gps::uniformLocation(p, "rainColor"), 1, glm::value_ptr(rainColor));
+	glUniform1f(gps::uniformLocation(p, "rainAlpha"), 0.35f);
 	rain.Draw(rainShader, rainAmount);
 }
 
 // Cloud uniforms shared by every program that includes clouds.glsl.
 void setCloudUniforms(GLuint program)
 {
-	glUniform2fv(glGetUniformLocation(program, "cloudOffset"), 1, glm::value_ptr(cloudOffset));
+	glUniform2fv(gps::uniformLocation(program, "cloudOffset"), 1, glm::value_ptr(cloudOffset));
 	// Rain and snow bring full overcast regardless of the chosen cover.
-	glUniform1f(glGetUniformLocation(program, "cloudCoverage"), glm::mix(cloudCoverage, 1.0f, overcast));
+	glUniform1f(gps::uniformLocation(program, "cloudCoverage"), glm::mix(cloudCoverage, 1.0f, overcast));
 }
 
 static glm::vec3 lerp3(const glm::vec3& a, const glm::vec3& b, float t)
@@ -1594,11 +1594,11 @@ void updateDayNight()
 	ambientNow = ambient;
 	directNow = directColor;
 	fogColorNow = fogColor;
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowAmount"), snowAmount);
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "snowCover"), snowCover);
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "sandAmount"), sandAmount);
-	glUniform2fv(glGetUniformLocation(myCustomShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
+	glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "rainAmount"), rainAmount);
+	glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "snowAmount"), snowAmount);
+	glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "snowCover"), snowCover);
+	glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "sandAmount"), sandAmount);
+	glUniform2fv(gps::uniformLocation(myCustomShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
 
 	glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
 }
@@ -1651,9 +1651,9 @@ void drawSceneObjects(bool withTerrain)
 	// Puddles only form on the terrain, not on roofs or the tank. The terrain is left out of the
 	// puddle reflection: it lies under the mirror plane anyway.
 	if (withTerrain) {
-		glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 1.0f);
+		glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 1.0f);
 		grass.Draw(myCustomShader);
-		glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
+		glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
 	}
 
 
@@ -1782,12 +1782,12 @@ void renderPuddleReflection(const glm::mat4& houseModel)
 		glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, 1.0f)) *
 		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -PUDDLE_PLANE_Y, 0.0f));
 	view = cameraView * mirror;
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix3fv(lightDirMatrixLoc, 1, GL_FALSE, glm::value_ptr(glm::mat3(glm::inverseTranspose(view))));
 	glm::vec3 fireEye = glm::vec3(view * houseModel * glm::vec4(FIRE_POS_MODEL + fireJitter, 1.0f));
 	glUniform3fv(fireLightPosEyeLoc, 1, glm::value_ptr(fireEye));
 	// Keep only what is above the floor (a small margin hides the seam where objects touch it).
-	glUniform4f(glGetUniformLocation(p, "clipPlane"), 0.0f, 1.0f, 0.0f, -(PUDDLE_PLANE_Y - 0.02f));
+	glUniform4f(gps::uniformLocation(p, "clipPlane"), 0.0f, 1.0f, 0.0f, -(PUDDLE_PLANE_Y - 0.02f));
 	glEnable(GL_CLIP_DISTANCE0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
@@ -1801,7 +1801,7 @@ void renderPuddleReflection(const glm::mat4& houseModel)
 
 	// Back to the real camera.
 	view = cameraView;
-	glUniformMatrix4fv(glGetUniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(gps::uniformLocation(p, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix3fv(lightDirMatrixLoc, 1, GL_FALSE, glm::value_ptr(lightDirMatrix));
 	updateFirePosition(houseModel);
 }
@@ -1822,7 +1822,7 @@ void renderScene()
 
 	depthMapShader.useShaderProgram();
 
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "lightSpaceTrMatrix"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "lightSpaceTrMatrix"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(computeLightSpaceTrMatrix()));
@@ -1834,7 +1834,7 @@ void renderScene()
 	//create model matrix for nanosuit
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1844,7 +1844,7 @@ void renderScene()
 	//create model matrix for ground
 	model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1854,7 +1854,7 @@ void renderScene()
 	//create model matrix for barn
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1863,7 +1863,7 @@ void renderScene()
 	//create model matrix for grass
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1876,7 +1876,7 @@ void renderScene()
 	//create model matrix for house
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1889,7 +1889,7 @@ void renderScene()
 	//create model matrix for ufo
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(birdAngle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1898,7 +1898,7 @@ void renderScene()
 	//create model matrix for tank
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1920,7 +1920,7 @@ void renderScene()
 	//create model matrix for goat2
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1929,7 +1929,7 @@ void renderScene()
 	//create model matrix for goat3
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1938,7 +1938,7 @@ void renderScene()
 	//create model matrix for the tank (farmer.obj)
 	model = tankModelMatrix();
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
@@ -1947,22 +1947,22 @@ void renderScene()
 	//create model matrix for wood
 	model = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
 	//send model matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"),
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(model));
 	wood.Draw(depthMapShader);
 
 	model = sandwormModelMatrix();
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	sandworm.Draw(depthMapShader);
 
 	model = camelModelMatrix();
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	camel.Draw(depthMapShader);
 
 	model = roosterModelMatrix();
-	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix4fv(gps::uniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	rooster.Draw(depthMapShader);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1979,7 +1979,7 @@ void renderScene()
 	}
 
 	//send lightSpace matrix to shader
-	glUniformMatrix4fv(glGetUniformLocation(myCustomShader.shaderProgram, "lightSpaceTrMatrix"),
+	glUniformMatrix4fv(gps::uniformLocation(myCustomShader.shaderProgram, "lightSpaceTrMatrix"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(computeLightSpaceTrMatrix()));
@@ -1994,7 +1994,7 @@ void renderScene()
 		view = glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1, 0, 0)) *
 			glm::rotate(glm::mat4(1.0f), glm::radians(yaw), glm::vec3(0, 1, 0)) * view;
 	}
-	glUniformMatrix4fv(glGetUniformLocation(myCustomShader.shaderProgram, "view"),
+	glUniformMatrix4fv(gps::uniformLocation(myCustomShader.shaderProgram, "view"),
 		1,
 		GL_FALSE,
 		glm::value_ptr(view));
@@ -2015,8 +2015,8 @@ void renderScene()
 	// Shadows are needed by the reflection pass too.
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, depthMapTexture);
-	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
-	glUniform1f(glGetUniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
+	glUniform1i(gps::uniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
+	glUniform1f(gps::uniformLocation(myCustomShader.shaderProgram, "puddleSurface"), 0.0f);
 	if (puddleWetness > 0.0f)
 		renderPuddleReflection(houseModel);
 	uploadPuddleUniforms(); // binds the reflection for sampling, now that it is drawn
@@ -2027,35 +2027,35 @@ void renderScene()
 	//bind the depth map
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, depthMapTexture);
-	glUniform1i(glGetUniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
+	glUniform1i(gps::uniformLocation(myCustomShader.shaderProgram, "shadowMap"), 3);
 
 	drawSceneObjects(true);
 
 	skyboxShader.useShaderProgram();
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor) * (1.0f - overcast));
-	glUniformMatrix3fv(glGetUniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
-	glUniform1fv(glGetUniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "skyTint"), 1, glm::value_ptr(skyColor));
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "starVisibility"), glm::smoothstep(0.3f, 0.9f, nightFactor) * (1.0f - overcast));
+	glUniformMatrix3fv(gps::uniformLocation(skyboxShader.shaderProgram, "starRotation"), 1, GL_FALSE, glm::value_ptr(starRotation));
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "time"), (float)glfwGetTime());
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "planetDir"), gps::PLANET_COUNT, glm::value_ptr(planetDirs[0]));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "planetColor"), gps::PLANET_COUNT, glm::value_ptr(planetColors[0]));
+	glUniform1fv(gps::uniformLocation(skyboxShader.shaderProgram, "planetBrightness"), gps::PLANET_COUNT, planetBrightness);
 	// Meteors are a night sight; by day only a faint trace shows (bright fireballs can be seen in daylight).
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "rainbowStrength"), rainbowStrength);
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "sandAmount"), sandAmount);
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "auroraStrength"), auroraStrength);
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustColor"), 1, glm::value_ptr(dustColor));
-	glUniform2fv(glGetUniformLocation(skyboxShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "sunDirWorld"), 1, glm::value_ptr(sunSkyDir));
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "rainbowStrength"), rainbowStrength);
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "sandAmount"), sandAmount);
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "auroraStrength"), auroraStrength);
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "dustColor"), 1, glm::value_ptr(dustColor));
+	glUniform2fv(gps::uniformLocation(skyboxShader.shaderProgram, "dustOffset"), 1, glm::value_ptr(dustOffset));
 	updateMeteors(skyboxShader.shaderProgram, glm::mix(0.3f, 1.0f, glm::smoothstep(0.3f, 0.9f, nightFactor)));
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
-	glUniform1f(glGetUniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "moonDirWorld"), 1, glm::value_ptr(moonSkyDir));
+	glUniform1f(gps::uniformLocation(skyboxShader.shaderProgram, "moonGlow"), moonGlow * glm::clamp(nightFactor * 1.2f, 0.0f, 1.0f));
 	setCloudUniforms(skyboxShader.shaderProgram);
 	glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);
 	glm::vec3 lightDirWorld = glm::normalize(currentLightDir);
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "lightDirWorld"), 1, glm::value_ptr(lightDirWorld));
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
-	glUniform3fv(glGetUniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "cameraPosWorld"), 1, glm::value_ptr(cameraPos));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "lightDirWorld"), 1, glm::value_ptr(lightDirWorld));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "cloudLitColor"), 1, glm::value_ptr(cloudLitColor));
+	glUniform3fv(gps::uniformLocation(skyboxShader.shaderProgram, "cloudShadowColor"), 1, glm::value_ptr(cloudShadowColor));
 	mySkyBox.Draw(skyboxShader, view, projection);
 	drawBlackhole();
 	drawMoon();
@@ -2093,10 +2093,10 @@ int main(int argc, const char * argv[]) {
 	skyboxShader.loadShader("shaders/skyboxShader.vert", "shaders/skyboxShader.frag");
 	skyboxShader.useShaderProgram();
 	view = myCamera.getViewMatrix();
-	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.shaderProgram, "view"), 1, GL_FALSE,
+	glUniformMatrix4fv(gps::uniformLocation(skyboxShader.shaderProgram, "view"), 1, GL_FALSE,
 		glm::value_ptr(view));
 	projection = glm::perspective(glm::radians(45.0f), (float)retina_width / (float)retina_height, 0.1f, 1000.0f);
-	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.shaderProgram, "projection"), 1, GL_FALSE,
+	glUniformMatrix4fv(gps::uniformLocation(skyboxShader.shaderProgram, "projection"), 1, GL_FALSE,
 		glm::value_ptr(projection));
 
 	GLFWcursor* cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);

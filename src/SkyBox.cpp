@@ -27,14 +27,14 @@ namespace gps {
         
         //set the view and projection matrices
         glm::mat4 transformedView = glm::mat4(glm::mat3(viewMatrix));
-        glUniformMatrix4fv(glGetUniformLocation(shader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(transformedView));
-        glUniformMatrix4fv(glGetUniformLocation(shader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+        glUniformMatrix4fv(gps::uniformLocation(shader.shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(transformedView));
+        glUniformMatrix4fv(gps::uniformLocation(shader.shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projectionMatrix));
         
         glDepthFunc(GL_LEQUAL);
         
         glBindVertexArray(skyboxVAO);
         glActiveTexture(GL_TEXTURE0);
-        glUniform1i(glGetUniformLocation(shader.shaderProgram, "skybox"), 0);
+        glUniform1i(gps::uniformLocation(shader.shaderProgram, "skybox"), 0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
