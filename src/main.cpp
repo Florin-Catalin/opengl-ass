@@ -284,6 +284,41 @@ glm::mat4 camelModelMatrix()
 	return glm::scale(m, glm::vec3(CAMEL_SCALE));
 }
 
+// "Cock (Chicken Gun)" by MirP (CC BY 4.0), converted with tools/glb2obj.py: a rooster that
+// wanders around the camp (see updateRooster). Its position and heading are in camp space, before
+// the scene rotation (Q/E), so it stays on the camp floor when the scene turns. The model faces +z.
+gps::Model3D rooster;
+const float ROOSTER_SCALE = 0.55f;      // about 0.63 units tall
+const float ROOSTER_WALK_SPEED = 0.9f;  // units per second
+const float ROOSTER_RUN_SPEED = 2.6f;   // when the tank comes close
+const float ROOSTER_TURN_SPEED = 5.0f;  // radians per second
+const glm::vec2 ROOSTER_AREA_MIN = glm::vec2(-8.0f, -8.0f); // the flat camp floor (camp space XZ)
+const glm::vec2 ROOSTER_AREA_MAX = glm::vec2(8.0f, 6.5f);
+glm::vec3 roosterPos = glm::vec3(-0.5f, 0.013f, 5.0f); // open ground in front of the tank
+float roosterHeading = 0.0f;           // radians around +y; 0 = facing +z
+glm::vec3 roosterTarget = roosterPos;
+float roosterWait = 1.0f;              // seconds left standing still (pecking) before moving on
+bool roosterWalking = false;
+bool roosterFleeing = false;
+float roosterStep = 0.0f;              // walk cycle phase, drives the bobbing
+double roosterPeckStart = -10.0;       // when the current peck started
+
+glm::mat4 roosterModelMatrix()
+{
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	// Walking: a little hop with every step and a side-to-side waddle.
+	float hop = roosterWalking ? 0.05f * fabsf(sinf(roosterStep)) : 0.0f;
+	m = glm::translate(m, roosterPos + glm::vec3(0.0f, hop, 0.0f));
+	m = glm::rotate(m, roosterHeading, glm::vec3(0, 1, 0));
+	if (roosterWalking)
+		m = glm::rotate(m, 0.1f * sinf(roosterStep), glm::vec3(0, 0, 1));
+	// Standing still: now and then it bends forward to peck at the ground (pivoting on its feet).
+	float peck = (float)(glfwGetTime() - roosterPeckStart);
+	if (!roosterWalking && peck >= 0.0f && peck < 0.6f)
+		m = glm::rotate(m, glm::radians(35.0f) * sinf(peck / 0.6f * 3.14159f), glm::vec3(1, 0, 0));
+	return glm::scale(m, glm::vec3(ROOSTER_SCALE));
+}
+
 // Placed in the world like the other static models: it turns with the scene (Q/E).
 glm::mat4 sandwormModelMatrix()
 {
@@ -551,6 +586,107 @@ bool startFog = false;
 int lightsOn = 0;
 
 int acc = 1;
+static float random01() { return rand() / (float)RAND_MAX; }
+
+// True if the rooster at camp-space position p would stand inside an obstacle or outside the
+// camp floor. Its footprint is a small square that does not turn with it, so turning on the
+// spot can never get it stuck.
+static bool roosterBlocked(const glm::vec3& p, const std::vector<gps::Footprint>& obstacles)
+{
+	if (p.x < ROOSTER_AREA_MIN.x || p.x > ROOSTER_AREA_MAX.x || p.z < ROOSTER_AREA_MIN.y || p.z > ROOSTER_AREA_MAX.y)
+		return true;
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	m = glm::translate(m, p);
+	gps::Bounds square = { glm::vec3(-0.25f, 0.0f, -0.25f), glm::vec3(0.25f, 0.6f, 0.25f) };
+	return gps::overlapsAny(gps::makeFootprint(square, m), obstacles);
+}
+
+// A new spot 1.5-6 units away that it can walk to in a straight line.
+static void pickRoosterTarget(const std::vector<gps::Footprint>& obstacles)
+{
+	for (int attempt = 0; attempt < 25; attempt++) {
+		float a = random01() * 6.2831853f, r = 1.5f + 4.5f * random01();
+		glm::vec3 t = roosterPos + glm::vec3(sinf(a) * r, 0.0f, cosf(a) * r);
+		// If it is already wedged against something (the tank parked next to it), only the
+		// destination has to be clear, so it can walk out.
+		bool wedged = roosterBlocked(roosterPos, obstacles);
+		bool clear = !roosterBlocked(t, obstacles);
+		for (int k = 1; k < 8 && clear && !wedged; k++)
+			clear = !roosterBlocked(glm::mix(roosterPos, t, k / 8.0f), obstacles);
+		if (clear) {
+			roosterTarget = t;
+			roosterWalking = true;
+			return;
+		}
+	}
+	roosterWait = 0.5f; // boxed in for now; try again shortly
+}
+
+// The rooster's little life: wander to a random spot, stand and peck, repeat. It runs away from
+// the tank and sleeps at night.
+void updateRooster()
+{
+	float dt = frameDt;
+	if (nightFactor > 0.85f) { // asleep
+		roosterWalking = false;
+		return;
+	}
+	std::vector<gps::Footprint> obstacles = sceneObstacles();
+	obstacles.push_back(gps::makeFootprint(tankBounds, tankModelMatrix()));
+
+	// The tank in camp space (undo the scene rotation).
+	glm::mat4 toCamp = glm::rotate(glm::mat4(1.0f), -glm::radians(angle), glm::vec3(0, 1, 0));
+	glm::vec3 tankCamp = glm::vec3(toCamp * tankModelMatrix() * glm::vec4(0, 0, 0, 1));
+	glm::vec3 away = roosterPos - tankCamp;
+	away.y = 0.0f;
+	if (glm::length(away) < 3.5f) {
+		if (!roosterFleeing) { // run off, away from the tank
+			glm::vec3 dir = glm::normalize(away + glm::vec3(0.001f, 0.0f, 0.0f));
+			roosterTarget = roosterPos + dir * 4.0f;
+			roosterWalking = true;
+			roosterFleeing = true;
+		}
+	}
+	else
+		roosterFleeing = false;
+
+	if (!roosterWalking) {
+		roosterWait -= dt;
+		if (roosterWait <= 0.0f)
+			pickRoosterTarget(obstacles);
+		else if (glfwGetTime() - roosterPeckStart > 0.6f + 1.5f * random01() && random01() < dt * 1.2f)
+			roosterPeckStart = glfwGetTime();
+		return;
+	}
+
+	glm::vec3 toTarget = roosterTarget - roosterPos;
+	toTarget.y = 0.0f;
+	float distance = glm::length(toTarget);
+	if (distance < 0.15f) {
+		roosterWalking = false;
+		roosterWait = 1.0f + 3.0f * random01();
+		return;
+	}
+	// Turn towards the target, and only walk once roughly facing it.
+	float want = atan2f(toTarget.x, toTarget.z);
+	float diff = atan2f(sinf(want - roosterHeading), cosf(want - roosterHeading));
+	float turn = glm::clamp(diff, -ROOSTER_TURN_SPEED * dt, ROOSTER_TURN_SPEED * dt);
+	roosterHeading += turn;
+	if (fabsf(diff) > 0.8f)
+		return;
+
+	float speed = roosterFleeing ? ROOSTER_RUN_SPEED : ROOSTER_WALK_SPEED;
+	glm::vec3 next = roosterPos + glm::normalize(toTarget) * glm::min(speed * dt, distance);
+	// Blocked only if the step leads into something (if it is already overlapping, let it walk out).
+	if (roosterBlocked(next, obstacles) && !roosterBlocked(roosterPos, obstacles)) {
+		roosterWalking = false; // something is in the way (the tank moved, the scene turned)
+		roosterWait = 0.3f;
+		return;
+	}
+	roosterPos = next;
+	roosterStep += dt * speed * 14.0f;
+}
+
 void processMovement()
 {
 	birdAngle += 0.3f;
@@ -741,6 +877,7 @@ void initModels()
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	sandworm = gps::Model3D("objects/sandworm/sandworm.obj", "objects/sandworm/");
 	camel = gps::Model3D("objects/camel/camel.obj", "objects/camel/");
+	rooster = gps::Model3D("objects/rooster/rooster.obj", "objects/rooster/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	blackholeHole = gps::Model3D("objects/blackhole/blackhole_hole.obj", "objects/blackhole/");
 	blackholeDisc = gps::Model3D("objects/blackhole/blackhole_disc.obj", "objects/blackhole/");
@@ -1593,6 +1730,13 @@ void drawSceneObjects(bool withTerrain)
 	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	camel.Draw(myCustomShader);
+
+	// The rooster wandering around the camp.
+	model = roosterModelMatrix();
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	rooster.Draw(myCustomShader);
 }
 
 // Puddle reflections: the models drawn mirrored below the camp floor into reflectionFBO.
@@ -1643,6 +1787,7 @@ void renderScene()
 
 	processMovement();
 	updateDayNight();
+	updateRooster();
 
 	//render the scene to the depth buffer (first pass)
 
@@ -1786,6 +1931,10 @@ void renderScene()
 	model = camelModelMatrix();
 	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	camel.Draw(depthMapShader);
+
+	model = roosterModelMatrix();
+	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	rooster.Draw(depthMapShader);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

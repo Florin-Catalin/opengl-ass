@@ -9,6 +9,9 @@ python3 -I tools/glb2obj.py objects/sandworm/dune_sandworm.glb objects/sandworm 
 # Camel: one solid-colour mesh.
 python3 -I tools/glb2obj.py objects/camel/pink_camel.glb objects/camel camel
 
+# Rooster: one textured mesh.
+python3 -I tools/glb2obj.py objects/rooster/cock_chicken_gun.glb objects/rooster rooster
+
 # Black hole: the flat accretion disc keeps its glowing (emissive) texture; everything else
 # (the core and the shells around it) is drawn solid black, so it needs no textures.
 BH=objects/blackhole/blackhole.glb
