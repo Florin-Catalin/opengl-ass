@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 # Sandworm: without the small human figure bundled with it.
 python3 -I tools/glb2obj.py objects/sandworm/dune_sandworm.glb objects/sandworm sandworm --skip Object_5
 
+# Camel: one solid-colour mesh.
+python3 -I tools/glb2obj.py objects/camel/pink_camel.glb objects/camel camel
+
 # Black hole: the flat accretion disc keeps its glowing (emissive) texture; everything else
 # (the core and the shells around it) is drawn solid black, so it needs no textures.
 BH=objects/blackhole/blackhole.glb

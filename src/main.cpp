@@ -269,6 +269,21 @@ const glm::vec3 SANDWORM_POSITION = glm::vec3(0.0f, -0.5f, -58.0f); // in the va
 const float SANDWORM_YAW_DEGREES = 0.0f;
 const float SANDWORM_SCALE = 1.5f; // ~50 units long, ~28 tall: it towers over the canyon rim
 
+// "Camel" by anfisa-potekha (CC BY 4.0), converted with tools/glb2obj.py. It stands on the camp
+// floor between the tank and the water tank; the tank collides with it.
+gps::Model3D camel;
+const glm::vec3 CAMEL_POSITION = glm::vec3(2.6f, 0.013f, 2.0f);
+const float CAMEL_YAW_DEGREES = 110.0f; // side-on to the starting camera
+const float CAMEL_SCALE = 1.25f; // about 2.1 units tall, next to the 2.1-unit tank
+
+glm::mat4 camelModelMatrix()
+{
+	glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0, 1, 0));
+	m = glm::translate(m, CAMEL_POSITION);
+	m = glm::rotate(m, glm::radians(CAMEL_YAW_DEGREES), glm::vec3(0, 1, 0));
+	return glm::scale(m, glm::vec3(CAMEL_SCALE));
+}
+
 // Placed in the world like the other static models: it turns with the scene (Q/E).
 glm::mat4 sandwormModelMatrix()
 {
@@ -288,7 +303,7 @@ glm::vec3 tankPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 
 // Collision: the tank (farmer.obj) against the bounds of each mesh in the static scene objects.
 gps::Bounds tankBounds;
-std::vector<gps::Bounds> houseBounds, tentsBounds, woodBounds, rocketBounds;
+std::vector<gps::Bounds> houseBounds, tentsBounds, woodBounds, rocketBounds, camelBounds;
 float frameDt = 0.0f; // seconds since the previous frame
 
 
@@ -472,6 +487,10 @@ std::vector<gps::Footprint> sceneObstacles()
 	addFootprints(obstacles, houseBounds, sceneModel);
 	addFootprints(obstacles, tentsBounds, sceneModel);
 	addFootprints(obstacles, woodBounds, sceneModel);
+	// The camel has its own placement; its bounds are in model space like the others.
+	glm::mat4 camelModel = camelModelMatrix();
+	for (size_t i = 0; i < camelBounds.size(); i++)
+		obstacles.push_back(gps::makeFootprint(camelBounds[i], camelModel));
 	if (distanceRocket < 1.0f) // still on the launch pad
 		addFootprints(obstacles, rocketBounds, sceneModel);
 	return obstacles;
@@ -721,6 +740,7 @@ void initModels()
 	farmer = gps::Model3D("objects/farmer/farmer.obj", "objects/farmer/");
 	wood = gps::Model3D("objects/wood/wood.obj", "objects/wood/");
 	sandworm = gps::Model3D("objects/sandworm/sandworm.obj", "objects/sandworm/");
+	camel = gps::Model3D("objects/camel/camel.obj", "objects/camel/");
 	moon = gps::Model3D("objects/moon/moon.obj", "objects/moon/");
 	blackholeHole = gps::Model3D("objects/blackhole/blackhole_hole.obj", "objects/blackhole/");
 	blackholeDisc = gps::Model3D("objects/blackhole/blackhole_disc.obj", "objects/blackhole/");
@@ -738,6 +758,7 @@ void initModels()
 	tentsBounds = tents.GetMeshBounds();
 	woodBounds = wood.GetMeshBounds();
 	rocketBounds = tank.GetMeshBounds();
+	camelBounds = camel.GetMeshBounds();
 }
 
 void initShaders()
@@ -1565,6 +1586,13 @@ void drawSceneObjects(bool withTerrain)
 	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
 	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 	sandworm.Draw(myCustomShader);
+
+	// The camel resting in the camp.
+	model = camelModelMatrix();
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	normalMatrix = glm::mat3(glm::inverseTranspose(view*model));
+	glUniformMatrix3fv(normalMatrixLoc, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+	camel.Draw(myCustomShader);
 }
 
 // Puddle reflections: the models drawn mirrored below the camp floor into reflectionFBO.
@@ -1754,6 +1782,10 @@ void renderScene()
 	model = sandwormModelMatrix();
 	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 	sandworm.Draw(depthMapShader);
+
+	model = camelModelMatrix();
+	glUniformMatrix4fv(glGetUniformLocation(depthMapShader.shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	camel.Draw(depthMapShader);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

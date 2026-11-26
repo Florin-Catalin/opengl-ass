@@ -1,0 +1,7 @@
+newmtl material
+Ka 0 0 0
+Kd 0.6714 0.3556 0.8000
+Ks 0 0 0
+Ns 1
+map_Kd camel_mat0.png
+
