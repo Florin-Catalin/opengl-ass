@@ -106,6 +106,7 @@ def main():
     # materials -> MTL + their base color textures, extracted or solid-color
     # (glTF colors are linear, PNGs are sRGB)
     mats = gltf.get('materials', [])
+    written = {}  # image index -> file, so materials sharing an image share one file
     with open(os.path.join(out_dir, name + '.mtl'), 'w') as mtl:
         for i, m in enumerate(mats):
             if i not in used:
@@ -117,13 +118,17 @@ def main():
             if emissive and 'emissiveTexture' in m:
                 source = m['emissiveTexture']
             if source is not None and not no_textures:
-                image = gltf['images'][gltf['textures'][source['index']]['source']]
+                image_index = gltf['textures'][source['index']]['source']
+                image = gltf['images'][image_index]
                 ext = {'image/png': 'png', 'image/jpeg': 'jpg'}.get(image.get('mimeType'))
-                if ext and 'bufferView' in image:
+                if image_index in written:
+                    tex = written[image_index]
+                elif ext and 'bufferView' in image:
                     view = gltf['bufferViews'][image['bufferView']]
                     start = view.get('byteOffset', 0)
                     tex = '%s_mat%d.%s' % (name, i, ext)
                     open(os.path.join(out_dir, tex), 'wb').write(binary[start:start + view['byteLength']])
+                    written[image_index] = tex
             if tex is None:
                 srgb = [round(255 * max(0.0, min(1.0, c)) ** (1 / 2.2)) for c in color]
                 tex = '%s_mat%d.png' % (name, i)
