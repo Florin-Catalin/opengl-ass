@@ -13,7 +13,7 @@ An OpenGL 4.1 core-profile / C++11 demo scene for Linux (README marks it unmaint
 - Assets (`objects/`, `shaders/`, `textures/`) are loaded via paths relative to the working directory, so always run from the repo root. Filenames are case-sensitive (e.g. `objects/wood/wood.obj`).
 - Tested with the Ubuntu 24.04 packages (CMake 3.28, GLFW 3.3, GLEW 2.2) on Mesa with a 4.6 core context.
 
-- `tools/glb2obj.py` converts `.glb` models to OBJ/MTL for the loader (no dependencies). Run it with `python3 -I`.
+- `tools/glb2obj.py` converts `.glb` models to OBJ/MTL for the loader (no dependencies). It bakes node transforms and extracts embedded base color textures. `--skip MESH_NAME` leaves out meshes, `--emissive` uses emissive textures instead, and `--no-textures` writes only solid colors. Run it with `python3 -I`.
 
 ## Architecture
 

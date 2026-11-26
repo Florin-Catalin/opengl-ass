@@ -62,7 +62,7 @@ The loader only reads OBJ + MTL. To convert a `.glb` (glTF binary) model:
 python3 -I tools/glb2obj.py path/to/model.glb objects/<name> <name>
 ```
 
-Materials without textures get small solid-color PNGs, because the shader always samples a diffuse texture.
+Embedded base color textures (PNG/JPEG) are extracted next to the OBJ. Materials without textures get small solid-color PNGs, because the shader always samples a diffuse texture.
 
 ## Credits
 

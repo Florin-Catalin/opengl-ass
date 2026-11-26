@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Convert a .glb (glTF 2.0 binary) into OBJ + MTL that tiny_obj_loader / Model3D can load.
 
-Usage: python3 -I tools/glb2obj.py input.glb out_dir name
+Usage: python3 -I tools/glb2obj.py input.glb out_dir name [--skip MESH_NAME ...] [--emissive] [--no-textures]
+
+--skip leaves out every glTF mesh with that name (e.g. an unwanted prop bundled with a model);
+materials used only by skipped meshes are left out too.
+--emissive uses a material's emissive texture as map_Kd when it has one (for glowing models
+drawn with an unlit shader).
+--no-textures ignores all textures and writes only the solid-color PNGs.
 
 - One OBJ object per glTF mesh primitive (Model3D turns each into a Mesh), with node transforms applied.
-- Materials without a texture get a small solid-color PNG built from baseColorFactor, because
-  the scene shader always samples diffuseTexture.
-- Embedded textures are not handled (the models this was written for have none).
+- Embedded base color textures (PNG/JPEG) are extracted next to the OBJ and used as map_Kd.
+  Materials without a texture get a small solid-color PNG built from baseColorFactor, because
+  the scene shader always samples diffuseTexture. (baseColorFactor is not multiplied into an
+  extracted texture.)
 No third-party dependencies.
 """
 import json, os, struct, sys, zlib
@@ -83,17 +90,44 @@ def write_png(path, rgb, size=4):
 
 def main():
     src, out_dir, name = sys.argv[1:4]
+    extra = sys.argv[4:]
+    skip = set(extra[i + 1] for i in range(len(extra) - 1) if extra[i] == '--skip')
+    emissive = '--emissive' in extra
+    no_textures = '--no-textures' in extra
     gltf, binary = read_glb(src)
     os.makedirs(out_dir, exist_ok=True)
 
-    # materials -> MTL + solid-color textures (glTF colors are linear, PNGs are sRGB)
+    def kept(mesh):
+        return mesh.get('name') not in skip
+
+    used = set(p['material'] for m in gltf.get('meshes', []) if kept(m)
+               for p in m['primitives'] if 'material' in p)
+
+    # materials -> MTL + their base color textures, extracted or solid-color
+    # (glTF colors are linear, PNGs are sRGB)
     mats = gltf.get('materials', [])
     with open(os.path.join(out_dir, name + '.mtl'), 'w') as mtl:
         for i, m in enumerate(mats):
-            color = m.get('pbrMetallicRoughness', {}).get('baseColorFactor', [1, 1, 1, 1])[:3]
-            srgb = [round(255 * max(0.0, min(1.0, c)) ** (1 / 2.2)) for c in color]
-            tex = '%s_mat%d.png' % (name, i)
-            write_png(os.path.join(out_dir, tex), srgb)
+            if i not in used:
+                continue
+            pbr = m.get('pbrMetallicRoughness', {})
+            color = pbr.get('baseColorFactor', [1, 1, 1, 1])[:3]
+            tex = None
+            source = pbr.get('baseColorTexture')
+            if emissive and 'emissiveTexture' in m:
+                source = m['emissiveTexture']
+            if source is not None and not no_textures:
+                image = gltf['images'][gltf['textures'][source['index']]['source']]
+                ext = {'image/png': 'png', 'image/jpeg': 'jpg'}.get(image.get('mimeType'))
+                if ext and 'bufferView' in image:
+                    view = gltf['bufferViews'][image['bufferView']]
+                    start = view.get('byteOffset', 0)
+                    tex = '%s_mat%d.%s' % (name, i, ext)
+                    open(os.path.join(out_dir, tex), 'wb').write(binary[start:start + view['byteLength']])
+            if tex is None:
+                srgb = [round(255 * max(0.0, min(1.0, c)) ** (1 / 2.2)) for c in color]
+                tex = '%s_mat%d.png' % (name, i)
+                write_png(os.path.join(out_dir, tex), srgb)
             mtl.write('newmtl %s\nKa 0 0 0\nKd %.4f %.4f %.4f\nKs 0 0 0\nNs 1\nmap_Kd %s\n\n'
                       % (m.get('name', 'mat%d' % i), color[0], color[1], color[2], tex))
 
@@ -106,7 +140,7 @@ def main():
         m = mat_mul(parent, node_matrix(node))
         if 'mesh' in node:
             mesh = gltf['meshes'][node['mesh']]
-            for p, prim in enumerate(mesh['primitives']):
+            for p, prim in enumerate(mesh['primitives'] if kept(mesh) else []):
                 if prim.get('mode', 4) != 4:
                     continue
                 a = prim['attributes']
